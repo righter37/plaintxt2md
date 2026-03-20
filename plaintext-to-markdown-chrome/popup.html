@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Text to Markdown</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🤖</span>
+                <span class="logo-text">AI → Markdown</span>
+            </div>
+            <button id="open-sidepanel" class="icon-btn" title="在侧边栏打开">
+                <span>📐</span>
+            </button>
+        </header>
+
+        <!-- Mode Switch -->
+        <div class="mode-switch">
+            <button class="mode-btn active" data-mode="ai">
+                <span>🧠</span> AI
+            </button>
+            <button class="mode-btn" data-mode="local">
+                <span>⚡</span> 本地
+            </button>
+        </div>
+
+        <!-- API Settings (AI mode only) -->
+        <div id="api-settings" class="section">
+            <div class="section-header">
+                <span>API 设置</span>
+                <button id="toggle-api" class="link-btn">显示/隐藏</button>
+            </div>
+            <div id="api-panel" class="api-panel hidden">
+                <input type="password" id="api-key" placeholder="DashScope API Key" class="input">
+                <select id="ai-model" class="select">
+                    <option value="qwen-turbo">Turbo (快速)</option>
+                    <option value="qwen-plus" selected>Plus (平衡)</option>
+                    <option value="qwen-max">Max (最强)</option>
+                </select>
+                <button id="test-api" class="btn-small">测试连接</button>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="section">
+            <div class="section-header">
+                <span>输入</span>
+                <button id="paste-btn" class="link-btn">粘贴</button>
+            </div>
+            <textarea id="input-text" placeholder="在此粘贴或输入纯文本..." class="textarea"></textarea>
+            <div class="toolbar">
+                <button id="clear-btn" class="btn-small secondary">清空</button>
+                <button id="sample-btn" class="btn-small secondary">示例</button>
+            </div>
+        </div>
+
+        <!-- Convert Button -->
+        <button id="convert-btn" class="btn-primary">
+            <span class="btn-icon">✨</span>
+            <span id="btn-text">AI 智能转换</span>
+        </button>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <span>AI 正在分析...</span>
+        </div>
+
+        <!-- Output Area -->
+        <div class="section">
+            <div class="section-header">
+                <span>输出</span>
+                <div class="output-actions">
+                    <button id="copy-btn" class="link-btn">复制</button>
+                    <button id="download-btn" class="link-btn">下载</button>
+                </div>
+            </div>
+            <textarea id="output-text" placeholder="转换后的 Markdown 将显示在这里..." class="textarea output" readonly></textarea>
+            <div id="output-preview" class="preview hidden"></div>
+            <div class="toolbar">
+                <button id="preview-toggle" class="btn-small secondary">预览</button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <span id="status-text">就绪</span>
+            <span class="shortcuts">Ctrl+Shift+M</span>
+        </footer>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
