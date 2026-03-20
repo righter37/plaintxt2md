@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Plain Text to Markdown Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .editor-area {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            resize: none;
+        }
+        
+        .preview-area {
+            overflow-y: auto;
+        }
+        
+        .preview-area h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
+        .preview-area h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.3em; }
+        .preview-area h3 { font-size: 1.25em; font-weight: bold; margin: 0.83em 0; }
+        .preview-area h4 { font-size: 1em; font-weight: bold; margin: 1.12em 0; }
+        .preview-area p { margin: 1em 0; line-height: 1.6; }
+        .preview-area ul, .preview-area ol { margin: 1em 0; padding-left: 2em; }
+        .preview-area li { margin: 0.5em 0; }
+        .preview-area code { background: #f3f4f6; padding: 0.2em 0.4em; border-radius: 3px; font-family: monospace; }
+        .preview-area pre { background: #1f2937; color: #f9fafb; padding: 1em; border-radius: 8px; overflow-x: auto; }
+        .preview-area pre code { background: transparent; color: inherit; padding: 0; }
+        .preview-area blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; margin: 1em 0; color: #6b7280; }
+        .preview-area table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+        .preview-area th, .preview-area td { border: 1px solid #e5e7eb; padding: 0.5em; text-align: left; }
+        .preview-area th { background: #f9fafb; font-weight: 600; }
+        .preview-area a { color: #3b82f6; text-decoration: underline; }
+        .preview-area img { max-width: 100%; height: auto; }
+        .preview-area hr { border: none; border-top: 2px solid #e5e7eb; margin: 1.5em 0; }
+        
+        .btn-hover {
+            transition: all 0.3s ease;
+        }
+        .btn-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .mode-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .mode-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+        .mode-card.active {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        
+        .thinking-dot {
+            animation: thinking 1.4s infinite ease-in-out both;
+        }
+        .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes thinking {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        .streaming-cursor {
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .drag-active {
+            border-color: #3b82f6 !important;
+            background: #eff6ff !important;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+
+        .token-tag { color: #d73a49; }
+        .token-attr { color: #6f42c1; }
+        .token-string { color: #032f62; }
+        .token-comment { color: #6a737d; font-style: italic; }
+    </style>
+</head>
+<body class="p-4">
+    <div class="max-w-[1600px] mx-auto">
+        <!-- Header -->
+        <header class="glass-panel rounded-2xl p-6 mb-4 shadow-xl">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800">AI Text → Markdown</h1>
+                        <p class="text-gray-500 text-sm">大模型驱动的智能文本转换工具</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="loadSample()" class="btn-hover px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition">
+                        <i class="fas fa-vial mr-2"></i>示例
+                    </button>
+                    <button onclick="clearAll()" class="btn-hover px-4 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition">
+                        <i class="fas fa-trash-alt mr-2"></i>清空
+                    </button>
+                    <button onclick="toggleSettings()" class="btn-hover px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition">
+                        <i class="fas fa-cog mr-2"></i>设置
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Mode Selection -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div id="mode-local" class="mode-card glass-panel rounded-2xl p-5 border-2 border-transparent cursor-pointer" onclick="setMode('local')">
+                <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 bg-green-100 text-green-600 rounded-xl flex items-center justify-center text-lg">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                            本地转换
+                            <span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">快速</span>
+                        </h3>
+                        <p class="text-gray-500 text-sm mt-1">使用本地规则引擎，无需网络，即时响应。适合简单格式转换。</p>
+                    </div>
+                    <div class="mode-check hidden">
+                        <i class="fas fa-check-circle text-blue-500 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mode-ai" class="mode-card glass-panel rounded-2xl p-5 border-2 border-blue-500 bg-blue-50 active cursor-pointer" onclick="setMode('ai')">
+                <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-lg">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                            AI 智能转换
+                            <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">推荐</span>
+                        </h3>
+                        <p class="text-gray-500 text-sm mt-1">调用大模型分析文本结构，智能识别标题、代码块、表格、列表等。效果更好！</p>
+                    </div>
+                    <div class="mode-check">
+                        <i class="fas fa-check-circle text-blue-500 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Thinking Panel (hidden by default) -->
+        <div id="ai-thinking-panel" class="glass-panel rounded-2xl p-4 mb-4 hidden">
+            <div class="flex items-center gap-3 text-blue-600">
+                <div class="flex gap-1">
+                    <div class="w-2 h-2 bg-blue-600 rounded-full thinking-dot"></div>
+                    <div class="w-2 h-2 bg-blue-600 rounded-full thinking-dot"></div>
+                    <div class="w-2 h-2 bg-blue-600 rounded-full thinking-dot"></div>
+                </div>
+                <span class="font-medium">AI 正在分析文本结构...</span>
+            </div>
+            <div id="ai-thinking-content" class="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600 font-mono hidden">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <!-- Left Sidebar: Options -->
+            <div class="lg:col-span-3">
+                <div class="glass-panel rounded-2xl p-4 shadow-xl">
+                    <div id="local-options">
+                        <h3 class="font-semibold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-sliders-h mr-2 text-blue-500"></i>本地转换选项
+                        </h3>
+                        
+                        <div class="space-y-2">
+                            <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                <input type="checkbox" id="opt-headers" checked class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-3 text-sm text-gray-700">智能标题</span>
+                            </label>
+                            <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                <input type="checkbox" id="opt-lists" checked class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-3 text-sm text-gray-700">列表转换</span>
+                            </label>
+                            <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                <input type="checkbox" id="opt-emphasis" checked class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-3 text-sm text-gray-700">强调标记</span>
+                            </label>
+                            <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                <input type="checkbox" id="opt-links" checked class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-3 text-sm text-gray-700">链接识别</span>
+                            </label>
+                            <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                <input type="checkbox" id="opt-tables" checked class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-3 text-sm text-gray-700">表格识别</span>
+                            </label>
+                            <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                <input type="checkbox" id="opt-code" checked class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-3 text-sm text-gray-700">代码块</span>
+                            </label>
+                        </div>
+
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <h4 class="text-sm font-medium text-gray-600 mb-2">输入格式</h4>
+                            <select id="input-format" class="w-full p-2 text-sm border border-gray-300 rounded-lg">
+                                <option value="auto">自动检测</option>
+                                <option value="plain">纯文本</option>
+                                <option value="indented">缩进大纲</option>
+                                <option value="numbered">编号列表</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="ai-options" class="hidden">
+                        <h3 class="font-semibold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-magic mr-2 text-purple-500"></i>AI 转换选项
+                        </h3>
+                        
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">AI 模型</label>
+                                <select id="ai-model" class="w-full mt-1 p-2 text-sm border border-gray-300 rounded-lg">
+                                    <option value="qwen-turbo">通义千问 Turbo (快速)</option>
+                                    <option value="qwen-plus" selected>通义千问 Plus (平衡)</option>
+                                    <option value="qwen-max">通义千问 Max (最强)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">输出风格</label>
+                                <select id="ai-style" class="w-full mt-1 p-2 text-sm border border-gray-300 rounded-lg">
+                                    <option value="standard" selected>标准 Markdown</option>
+                                    <option value="github">GitHub 风格</option>
+                                    <option value="minimal">简洁风格</option>
+                                    <option value="detailed">详细风格</option>
+                                </select>
+                            </div>
+
+                            <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                <input type="checkbox" id="ai-show-thinking" class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-3 text-sm text-gray-700">显示 AI 思考过程</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button onclick="convertText()" id="convert-btn" class="btn-hover w-full mt-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold shadow-lg">
+                        <i class="fas fa-magic mr-2"></i>
+                        <span id="convert-btn-text">AI 智能转换</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Content: Input & Output -->
+            <div class="lg:col-span-9">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+                    <!-- Input Area -->
+                    <div class="glass-panel rounded-2xl shadow-xl flex flex-col">
+                        <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                            <h3 class="font-semibold text-gray-800 flex items-center">
+                                <i class="fas fa-edit mr-2 text-green-500"></i>输入 (Plain Text)
+                            </h3>
+                            <div class="flex items-center gap-2">
+                                <span id="input-stats" class="text-xs text-gray-500">0 字符 | 0 行</span>
+                                <label class="cursor-pointer px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition">
+                                    <i class="fas fa-upload mr-1"></i>导入
+                                    <input type="file" id="file-input" accept=".txt,.md,.markdown" class="hidden" onchange="handleFileSelect(event)">
+                                </label>
+                            </div>
+                        </div>
+                        <div class="flex-1 p-4 relative" id="drop-zone">
+                            <textarea 
+                                id="input-text" 
+                                class="editor-area w-full h-full min-h-[500px] p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm leading-relaxed"
+                                placeholder="在此粘贴或输入纯文本内容...
+
+AI 会智能分析：
+- 识别标题层级和文档结构
+- 检测代码块并标注语言
+- 识别表格、列表、链接
+- 判断段落边界
+
+也可以直接拖拽文件到此处"
+                                oninput="updateStats()"
+                                ondrop="handleDrop(event)"
+                                ondragover="handleDragOver(event)"
+                                ondragleave="handleDragLeave(event)"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Output Area -->
+                    <div class="glass-panel rounded-2xl shadow-xl flex flex-col">
+                        <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <h3 class="font-semibold text-gray-800 flex items-center">
+                                    <i class="fas fa-code mr-2 text-purple-500"></i>输出 (Markdown)
+                                </h3>
+                                <div class="flex bg-gray-100 rounded-lg p-1">
+                                    <button onclick="setViewMode('source')" id="btn-source" class="px-3 py-1 rounded-md text-sm font-medium bg-white shadow-sm text-gray-800 transition">
+                                        源码
+                                    </button>
+                                    <button onclick="setViewMode('preview')" id="btn-preview" class="px-3 py-1 rounded-md text-sm font-medium text-gray-600 hover:text-gray-800 transition">
+                                        预览
+                                    </button>
+                                    <button onclick="setViewMode('split')" id="btn-split" class="px-3 py-1 rounded-md text-sm font-medium text-gray-600 hover:text-gray-800 transition">
+                                        分屏
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span id="output-stats" class="text-xs text-gray-500">0 字符</span>
+                                <button onclick="copyOutput()" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+                                    <i class="fas fa-copy mr-1"></i>复制
+                                </button>
+                                <button onclick="downloadOutput()" class="px-3 py-1.5 bg-green-50 text-green-600 rounded-lg text-sm font-medium hover:bg-green-100 transition">
+                                    <i class="fas fa-download mr-1"></i>下载
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Source View -->
+                        <div id="view-source" class="flex-1 p-4">
+                            <textarea 
+                                id="output-text" 
+                                class="editor-area w-full h-full min-h-[500px] p-4 border border-gray-200 rounded-xl bg-gray-50 text-sm leading-relaxed"
+                                readonly
+                            ></textarea>
+                        </div>
+                        
+                        <!-- Preview View -->
+                        <div id="view-preview" class="flex-1 p-4 hidden">
+                            <div id="preview-content" class="preview-area w-full h-full min-h-[500px] p-6 border border-gray-200 rounded-xl bg-white prose prose-sm max-w-none overflow-y-auto">
+                            </div>
+                        </div>
+                        
+                        <!-- Split View -->
+                        <div id="view-split" class="flex-1 p-4 hidden">
+                            <div class="grid grid-cols-2 gap-4 h-full">
+                                <textarea 
+                                    id="output-text-split" 
+                                    class="editor-area w-full h-full min-h-[500px] p-4 border border-gray-200 rounded-xl bg-gray-50 text-sm leading-relaxed"
+                                    readonly
+                                ></textarea>
+                                <div id="preview-content-split" class="preview-area w-full h-full min-h-[500px] p-6 border border-gray-200 rounded-xl bg-white prose prose-sm max-w-none overflow-y-auto">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-4 text-center text-white/70 text-sm pb-4">
+            <p>AI Plain Text to Markdown Converter &copy; 2024 | 本地 + AI 双引擎</p>
+        </footer>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50 flex items-center justify-center">
+        <div class="glass-panel rounded-2xl p-6 w-full max-w-md m-4 shadow-2xl">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-cog mr-2 text-blue-500"></i>API 设置
+                </h3>
+                <button onclick="toggleSettings()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API Base URL</label>
+                    <input type="text" id="api-base-url" value="https://dashscope.aliyuncs.com/compatible-mode/v1" 
+                        class="w-full p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                    <div class="relative">
+                        <input type="password" id="api-key" value="" placeholder="在此输入你的 DashScope API Key" 
+                            class="w-full p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none pr-10">
+                        <button onclick="toggleApiKeyVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-eye" id="api-key-eye"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">API Key 仅存储在本地浏览器中</p>
+                </div>
+
+                <div class="pt-4 border-t border-gray-200">
+                    <button onclick="testConnection()" class="w-full py-2 bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition">
+                        <i class="fas fa-plug mr-2"></i>测试连接
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 px-6 py-3 bg-gray-800 text-white rounded-lg shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <span id="toast-message">操作成功</span>
+    </div>
+
+    <script>
+        // ============ Configuration ============
+        const DEFAULT_CONFIG = {
+            apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+            apiKey: '',  // 请在设置中填入你的 DashScope API Key
+            model: 'qwen-plus'
+        };
+
+        let currentMode = 'ai';
+        let currentViewMode = 'source';
+        let isConverting = false;
+
+        // ============ AI Prompt Template ============
+        const AI_PROMPT_TEMPLATE = `你是一位专业的文档格式分析专家。请将用户提供的纯文本转换为格式规范的 Markdown 文档。
+
+## 分析任务
+
+1. **文档结构分析**
+   - 识别主标题、章节标题、子标题
+   - 判断层级关系（H1-H6）
+   - 识别引言、正文、总结等不同段落类型
+
+2. **代码块识别**
+   - 检测代码片段（函数、类、配置等）
+   - 识别编程语言（Python、JavaScript、Java、C++、SQL、Bash 等）
+   - 使用 fenced code block (\`\`\`) 包裹
+
+3. **列表识别**
+   - 无序列表（项目符号）
+   - 有序列表（编号）
+   - 嵌套列表
+
+4. **表格识别**
+   - 识别表格结构
+   - 使用 Markdown 表格语法
+
+5. **其他元素**
+   - 链接（URL、邮箱）
+   - 强调（粗体、斜体）
+   - 引用块
+   - 分隔线
+
+## 输出风格
+
+{STYLE}
+
+## 输出要求
+
+1. 只输出转换后的 Markdown 内容，不要添加解释
+2. 保持原文的语义和顺序
+3. 使用适当的空行分隔不同段落
+4. 代码块必须标注语言类型
+
+## 待转换文本
+
+{text}`;
+
+        // ============ Mode Management ============
+        
+        function setMode(mode) {
+            currentMode = mode;
+            
+            // Update UI
+            document.querySelectorAll('.mode-card').forEach(card => {
+                card.classList.remove('active', 'border-blue-500', 'bg-blue-50');
+                card.classList.add('border-transparent');
+                card.querySelector('.mode-check').classList.add('hidden');
+            });
+            
+            const activeCard = document.getElementById(`mode-${mode}`);
+            activeCard.classList.add('active', 'border-blue-500', 'bg-blue-50');
+            activeCard.classList.remove('border-transparent');
+            activeCard.querySelector('.mode-check').classList.remove('hidden');
+            
+            // Toggle options panels
+            if (mode === 'ai') {
+                document.getElementById('local-options').classList.add('hidden');
+                document.getElementById('ai-options').classList.remove('hidden');
+                document.getElementById('convert-btn-text').textContent = 'AI 智能转换';
+            } else {
+                document.getElementById('local-options').classList.remove('hidden');
+                document.getElementById('ai-options').classList.add('hidden');
+                document.getElementById('convert-btn-text').textContent = '本地转换';
+            }
+        }
+
+        // ============ AI Conversion ============
+        
+        async function convertWithAI(text) {
+            const apiKey = document.getElementById('api-key').value || DEFAULT_CONFIG.apiKey;
+            const baseUrl = document.getElementById('api-base-url').value || DEFAULT_CONFIG.apiUrl;
+            const model = document.getElementById('ai-model').value;
+            const style = document.getElementById('ai-style').value;
+            const showThinking = document.getElementById('ai-show-thinking').checked;
+            
+            const styleMap = {
+                'standard': '标准 Markdown 格式，清晰易读',
+                'github': 'GitHub Flavored Markdown，支持任务列表等',
+                'minimal': '简洁风格，减少不必要的格式标记',
+                'detailed': '详细风格，添加更多结构说明'
+            };
+            
+            const prompt = AI_PROMPT_TEMPLATE
+                .replace('{STYLE}', styleMap[style])
+                .replace('{text}', text);
+            
+            // Show thinking panel
+            const thinkingPanel = document.getElementById('ai-thinking-panel');
+            const thinkingContent = document.getElementById('ai-thinking-content');
+            thinkingPanel.classList.remove('hidden');
+            if (showThinking) {
+                thinkingContent.classList.remove('hidden');
+                thinkingContent.textContent = '正在分析文本结构...';
+            }
+            
+            try {
+                const response = await fetch(`${baseUrl}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            { role: 'system', content: '你是一个专业的 Markdown 格式转换助手。' },
+                            { role: 'user', content: prompt }
+                        ],
+                        temperature: 0.3,
+                        stream: false
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                let result = data.choices[0].message.content;
+                
+                // Clean up the result (remove markdown code block wrapper if present)
+                result = result.replace(/^```markdown\n/, '');
+                result = result.replace(/^```\n/, '');
+                result = result.replace(/\n```$/, '');
+                
+                if (showThinking) {
+                    thinkingContent.textContent = '转换完成！';
+                    setTimeout(() => {
+                        thinkingPanel.classList.add('hidden');
+                    }, 2000);
+                } else {
+                    thinkingPanel.classList.add('hidden');
+                }
+                
+                return result;
+                
+            } catch (error) {
+                thinkingPanel.classList.add('hidden');
+                throw error;
+            }
+        }
+
+        // ============ Local Conversion Engine ============
+        
+        class TextToMarkdownConverter {
+            constructor(options = {}) {
+                this.options = {
+                    headers: true,
+                    lists: true,
+                    emphasis: true,
+                    links: true,
+                    tables: true,
+                    code: true,
+                    ...options
+                };
+            }
+
+            convert(text, format = 'auto') {
+                if (!text.trim()) return '';
+                
+                let lines = text.split('\n');
+                let result = [];
+                let i = 0;
+                
+                if (format === 'auto') {
+                    format = this.detectFormat(lines);
+                }
+
+                while (i < lines.length) {
+                    let line = lines[i];
+
+                    if (!line.trim()) {
+                        result.push('');
+                        i++;
+                        continue;
+                    }
+
+                    if (this.options.code && this.isCodeBlockStart(line)) {
+                        let codeBlock = this.extractCodeBlock(lines, i);
+                        result.push(codeBlock);
+                        i += codeBlock.split('\n').length;
+                        continue;
+                    }
+
+                    let converted = line;
+                    switch (format) {
+                        case 'indented':
+                            converted = this.processIndented(line, lines, i);
+                            break;
+                        case 'numbered':
+                            converted = this.processNumbered(line);
+                            break;
+                        default:
+                            converted = this.processPlain(line, lines, i);
+                    }
+
+                    result.push(converted);
+                    i++;
+                }
+
+                return result.join('\n');
+            }
+
+            detectFormat(lines) {
+                let indentedCount = 0;
+                let numberedCount = 0;
+                let total = Math.min(lines.length, 20);
+
+                for (let i = 0; i < total; i++) {
+                    let line = lines[i];
+                    if (!line.trim()) continue;
+                    if (/^(\s{2,}|\t)/.test(line)) indentedCount++;
+                    if (/^\d+[.\)]\s/.test(line)) numberedCount++;
+                }
+
+                if (indentedCount > total * 0.3) return 'indented';
+                if (numberedCount > total * 0.3) return 'numbered';
+                return 'plain';
+            }
+
+            processIndented(line, lines, index) {
+                let indent = line.match(/^(\s*)/)[1].length;
+                let content = line.trim();
+                
+                if (this.options.headers) {
+                    let level = Math.min(Math.floor(indent / 2) + 1, 6);
+                    if (level === 1 && this.isLikelyTitle(content, lines, index)) {
+                        return `# ${content}`;
+                    } else if (level <= 3) {
+                        return `${'#'.repeat(level)} ${content}`;
+                    }
+                }
+
+                return this.processInline(content);
+            }
+
+            processNumbered(line) {
+                let match = line.match(/^(\d+)[.\)]\s*(.+)$/);
+                if (match) {
+                    let content = match[2].trim();
+                    return `1. ${this.processInline(content)}`;
+                }
+                return this.processInline(line.trim());
+            }
+
+            processPlain(line, lines, index) {
+                let content = line.trim();
+                
+                if (this.options.headers) {
+                    if (content === content.toUpperCase() && content.length > 3 && content.length < 50) {
+                        return `## ${content}`;
+                    }
+                    
+                    if (index < lines.length - 1) {
+                        let nextLine = lines[index + 1];
+                        if (/^[=-]{3,}$/.test(nextLine.trim()) && content.length < 50) {
+                            return `# ${content}`;
+                        }
+                    }
+                }
+
+                if (this.options.lists) {
+                    if (/^[•·\-\*]\s/.test(content)) {
+                        return `- ${this.processInline(content.substring(2).trim())}`;
+                    }
+                    if (/^\d+[.\)]\s/.test(content)) {
+                        return this.processInline(content);
+                    }
+                }
+
+                return this.processInline(content);
+            }
+
+            processInline(text) {
+                if (this.options.emphasis) {
+                    text = text.replace(/\b([A-Z]{3,})\b/g, '**$1**');
+                }
+
+                if (this.options.links) {
+                    text = text.replace(
+                        /(https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g,
+                        '[$1]($1)'
+                    );
+                    text = text.replace(
+                        /\b([\w.-]+@[\w.-]+\.[a-zA-Z]{2,})\b/g,
+                        '[$1](mailto:$1)'
+                    );
+                }
+
+                return text;
+            }
+
+            isLikelyTitle(content, lines, index) {
+                if (content.length > 60) return false;
+                if (index > 0 && lines[index - 1].trim()) return false;
+                if (content.endsWith(':')) return false;
+                return true;
+            }
+
+            isCodeBlockStart(line) {
+                return /^(    |\t)/.test(line) || 
+                       /^(function|class|def|const|let|var|if|for|while|import|from)\s/.test(line.trim());
+            }
+
+            extractCodeBlock(lines, startIndex) {
+                let codeLines = [];
+                let language = this.detectLanguage(lines[startIndex]);
+                
+                for (let i = startIndex; i < lines.length; i++) {
+                    let line = lines[i];
+                    if (/^(    |\t)/.test(line) || 
+                        (/^\s*$/.test(line) && codeLines.length > 0) ||
+                        (/^(function|class|def|const|let|var|if|for|while|import|from|return|print)/.test(line.trim()))) {
+                        codeLines.push(line.replace(/^(    |\t)/, ''));
+                    } else if (codeLines.length > 0) {
+                        break;
+                    } else {
+                        codeLines.push(line);
+                        break;
+                    }
+                }
+                
+                return '```' + language + '\n' + codeLines.join('\n') + '\n```';
+            }
+
+            detectLanguage(line) {
+                let trimmed = line.trim();
+                if (/^(import|from|def|class)\s/.test(trimmed) || /^(print\(|#)/.test(trimmed)) return 'python';
+                if (/^(const|let|var|function|import|export)\s/.test(trimmed) || trimmed.includes('=>')) return 'javascript';
+                if (/^(public|private|class|import|package)\s/.test(trimmed)) return 'java';
+                if (trimmed.startsWith('#include') || trimmed.startsWith('using namespace')) return 'cpp';
+                return '';
+            }
+        }
+
+        // ============ Main Convert Function ============
+        
+        async function convertText() {
+            const input = document.getElementById('input-text').value;
+            if (!input.trim()) {
+                showToast('请输入文本内容');
+                return;
+            }
+
+            if (isConverting) return;
+            isConverting = true;
+
+            const btn = document.getElementById('convert-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>转换中...';
+            btn.disabled = true;
+
+            try {
+                let output;
+                
+                if (currentMode === 'ai') {
+                    output = await convertWithAI(input);
+                } else {
+                    const format = document.getElementById('input-format').value;
+                    const options = {
+                        headers: document.getElementById('opt-headers').checked,
+                        lists: document.getElementById('opt-lists').checked,
+                        emphasis: document.getElementById('opt-emphasis').checked,
+                        links: document.getElementById('opt-links').checked,
+                        tables: document.getElementById('opt-tables').checked,
+                        code: document.getElementById('opt-code').checked
+                    };
+                    const converter = new TextToMarkdownConverter(options);
+                    output = converter.convert(input, format);
+                }
+                
+                document.getElementById('output-text').value = output;
+                document.getElementById('output-text-split').value = output;
+                
+                const html = marked.parse(output);
+                document.getElementById('preview-content').innerHTML = html;
+                document.getElementById('preview-content-split').innerHTML = html;
+                
+                updateOutputStats(output);
+                showToast(currentMode === 'ai' ? 'AI 转换完成！' : '转换完成！');
+                
+            } catch (error) {
+                showToast('转换失败: ' + error.message);
+                console.error(error);
+            } finally {
+                isConverting = false;
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // ============ UI Functions ============
+
+        function setViewMode(mode) {
+            currentViewMode = mode;
+            
+            ['source', 'preview', 'split'].forEach(m => {
+                const btn = document.getElementById(`btn-${m}`);
+                if (m === mode) {
+                    btn.classList.remove('text-gray-600');
+                    btn.classList.add('bg-white', 'shadow-sm', 'text-gray-800');
+                } else {
+                    btn.classList.add('text-gray-600');
+                    btn.classList.remove('bg-white', 'shadow-sm', 'text-gray-800');
+                }
+            });
+
+            document.getElementById('view-source').classList.add('hidden');
+            document.getElementById('view-preview').classList.add('hidden');
+            document.getElementById('view-split').classList.add('hidden');
+            
+            document.getElementById(`view-${mode}`).classList.remove('hidden');
+        }
+
+        function updateStats() {
+            const input = document.getElementById('input-text').value;
+            const chars = input.length;
+            const lines = input.split('\n').length;
+            document.getElementById('input-stats').textContent = `${chars.toLocaleString()} 字符 | ${lines} 行`;
+        }
+
+        function updateOutputStats(text) {
+            document.getElementById('output-stats').textContent = `${text.length.toLocaleString()} 字符`;
+        }
+
+        function copyOutput() {
+            const output = document.getElementById('output-text');
+            output.select();
+            document.execCommand('copy');
+            showToast('已复制到剪贴板！');
+        }
+
+        function downloadOutput() {
+            const output = document.getElementById('output-text').value;
+            if (!output.trim()) {
+                showToast('没有内容可下载');
+                return;
+            }
+            
+            const blob = new Blob([output], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `converted-${new Date().toISOString().slice(0, 10)}.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('下载已开始！');
+        }
+
+        function clearAll() {
+            document.getElementById('input-text').value = '';
+            document.getElementById('output-text').value = '';
+            document.getElementById('output-text-split').value = '';
+            document.getElementById('preview-content').innerHTML = '';
+            document.getElementById('preview-content-split').innerHTML = '';
+            document.getElementById('ai-thinking-panel').classList.add('hidden');
+            updateStats();
+            showToast('已清空');
+        }
+
+        function loadSample() {
+            const sample = `Project Overview
+================
+
+This is a sample plain text document that will be converted to Markdown.
+
+Introduction
+    Project Goals
+        - Improve efficiency by 25%
+        - Reduce costs
+        - Enhance user experience
+    
+    Timeline
+        Phase 1: Planning (Q1 2024)
+        Phase 2: Development (Q2-Q3 2024)
+        Phase 3: Launch (Q4 2024)
+
+Technical Details
+
+    Architecture
+        The system uses a microservices architecture with the following components:
+        
+        API Gateway
+            Handles routing and authentication
+            Rate limiting: 1000 req/min
+        
+        Database
+            PostgreSQL for primary storage
+            Redis for caching
+    
+    Code Example
+        function calculateTotal(items) {
+            return items.reduce((sum, item) => sum + item.price, 0);
+        }
+
+Team Members
+
+    Name                    Role                Email
+    Alice Johnson           Project Manager     alice@example.com
+    Bob Smith               Lead Developer      bob@example.com
+    Carol White             Designer            carol@example.com
+
+Contact
+
+For more information, visit https://example.com or email contact@example.com`;
+
+            document.getElementById('input-text').value = sample;
+            updateStats();
+            showToast('示例已加载！');
+        }
+
+        // ============ Settings Modal ============
+
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        function toggleApiKeyVisibility() {
+            const input = document.getElementById('api-key');
+            const eye = document.getElementById('api-key-eye');
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.classList.remove('fa-eye');
+                eye.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                eye.classList.remove('fa-eye-slash');
+                eye.classList.add('fa-eye');
+            }
+        }
+
+        async function testConnection() {
+            const apiKey = document.getElementById('api-key').value || DEFAULT_CONFIG.apiKey;
+            const baseUrl = document.getElementById('api-base-url').value || DEFAULT_CONFIG.apiUrl;
+            
+            showToast('正在测试连接...');
+            
+            try {
+                const response = await fetch(`${baseUrl}/models`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                
+                if (response.ok) {
+                    showToast('连接成功！');
+                } else {
+                    showToast('连接失败: ' + response.status);
+                }
+            } catch (error) {
+                showToast('连接失败: ' + error.message);
+            }
+        }
+
+        // ============ File Handling ============
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) readFile(file);
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById('drop-zone').classList.remove('drag-active');
+            
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                readFile(files[0]);
+            }
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById('drop-zone').classList.add('drag-active');
+        }
+
+        function handleDragLeave(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById('drop-zone').classList.remove('drag-active');
+        }
+
+        function readFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('input-text').value = e.target.result;
+                updateStats();
+                showToast(`已导入: ${file.name}`);
+            };
+            reader.readAsText(file);
+        }
+
+        // ============ Toast Notification ============
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // ============ Keyboard Shortcuts ============
+
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                convertText();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                downloadOutput();
+            }
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            showToast('欢迎使用 AI Markdown 转换器！');
+        });
+    </script>
+</body>
+</html>
