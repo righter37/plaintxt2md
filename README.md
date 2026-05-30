@@ -15,7 +15,15 @@
 <img width="2156" height="1625" alt="image" src="https://github.com/user-attachments/assets/1572d578-314c-40eb-9411-a7389fe50239" />
 
 
-## 动机
+# 测试实验
+- 分类达到95+准确率
+<img width="2442" height="1793" alt="image" src="https://github.com/user-attachments/assets/747394a4-9314-4227-8ed6-dd854de829ab" />
+
+- 消融实验证实分类prompt对比通用的优越性
+<img width="2618" height="1711" alt="image" src="https://github.com/user-attachments/assets/1e7015b4-f818-4346-ae16-5fbaa086ce60" />
+
+
+# 动机
 <img width="1252" height="501" alt="image" src="https://github.com/user-attachments/assets/202e88d7-a0ef-4196-8502-337376d9a6f1" />
 
 
@@ -24,7 +32,7 @@
 这个应用避免了此类问题，后续会做成浏览器插件并且支持思维导图结构输出
 
 
-## 插件使用
+# 插件使用
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/711912e8-ac7a-4a6c-b2f9-920050228cf9" />
 需要获取API KEY，暂时只做了阿里的
 <img width="1867" height="924" alt="image" src="https://github.com/user-attachments/assets/41bc0064-7183-4dca-b797-110fb6b5a22c" />
