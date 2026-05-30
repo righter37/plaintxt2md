@@ -1,5 +1,9 @@
 # 最新版为plaintxt2md-main/plaintext-to-markdown-chrome  下载后去chrome浏览器插件部分，打开“开发者模式”上传即可使用
 设计了5种常见场景的不同处理，可以手动选择，也可默认自动识别
+表格类如果直接复制粘贴纯文本保留不了格式，转换后可以识别
+<img width="3556" height="1859" alt="image" src="https://github.com/user-attachments/assets/f6d83063-302b-4038-a6a8-52ea2b3f746e" />
+
+
 <img width="1920" height="822" alt="image" src="https://github.com/user-attachments/assets/17aa979e-ed0f-4c3f-9696-d1516e334e5f" />
 
 <img width="2202" height="1193" alt="image" src="https://github.com/user-attachments/assets/4822a57b-1d2b-4a92-ad23-8e1cb804add7" />
