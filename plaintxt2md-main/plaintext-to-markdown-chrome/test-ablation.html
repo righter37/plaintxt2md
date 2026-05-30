@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Ablation Experiment — Prompt Strategy Comparison</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f7fafc; color: #2d3748; font-size: 14px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { color: #718096; margin-bottom: 24px; font-size: 13px; }
+  .setup { background: white; border-radius: 10px; border: 1px solid #e2e8f0; padding: 20px; margin-bottom: 20px; }
+  .setup h2 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
+  .setup-row { display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: end; }
+  label { font-size: 12px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+  input, select { width: 100%; padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; outline: none; }
+  input:focus, select:focus { border-color: #667eea; }
+  .run-btn { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .run-btn:hover { opacity: 0.9; }
+  .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .legend { background: white; border-radius: 10px; border: 1px solid #e2e8f0; padding: 16px 20px; margin-bottom: 20px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .dot-a { background: #a0aec0; }
+  .dot-b { background: #667eea; }
+  .dot-c { background: #48bb78; }
+  .progress-bar { background: white; border-radius: 10px; border: 1px solid #e2e8f0; padding: 16px 20px; margin-bottom: 20px; }
+  .progress-track { background: #e2e8f0; border-radius: 4px; height: 8px; margin: 10px 0; }
+  .progress-fill { background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .progress-label { font-size: 12px; color: #718096; }
+  .section { background: white; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px; overflow: hidden; }
+  .section-title { padding: 14px 20px; font-weight: 600; border-bottom: 1px solid #e2e8f0; background: #f7fafc; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #718096; }
+  /* Summary cards */
+  .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: #e2e8f0; }
+  .metric-card { background: white; padding: 16px; text-align: center; }
+  .metric-name { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .metric-row { display: flex; justify-content: center; gap: 12px; }
+  .metric-val { font-size: 18px; font-weight: 700; }
+  .val-a { color: #a0aec0; }
+  .val-b { color: #667eea; }
+  .val-c { color: #48bb78; }
+  .metric-delta { font-size: 11px; margin-top: 2px; }
+  .delta-pos { color: #48bb78; }
+  .delta-neg { color: #f56565; }
+  /* Results table */
+  .results-wrap { padding: 0; overflow-x: auto; }
+  table.results { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .results th { padding: 10px 14px; background: #f7fafc; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #718096; border-bottom: 1px solid #e2e8f0; text-align: left; }
+  .results td { padding: 10px 14px; border-bottom: 1px solid #f7fafc; vertical-align: top; }
+  .results tr:hover td { background: #f7fafc; }
+  .tag-ct { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .tag-td { background: #bee3f8; color: #2c5282; }
+  .tag-mn { background: #fefcbf; color: #744210; }
+  .tag-cs { background: #c6f6d5; color: #22543d; }
+  .tag-dr { background: #e9d8fd; color: #44337a; }
+  .tag-gp { background: #e2e8f0; color: #4a5568; }
+  .check { color: #48bb78; font-weight: 700; }
+  .cross { color: #f56565; font-weight: 700; }
+  .cell-a { color: #a0aec0; }
+  .cell-b { color: #667eea; font-weight: 600; }
+  .cell-c { color: #48bb78; font-weight: 600; }
+  .pending { color: #cbd5e0; font-style: italic; font-size: 12px; }
+  .running { color: #667eea; font-style: italic; font-size: 12px; }
+  .error-cell { color: #f56565; font-size: 11px; }
+  .input-preview { font-size: 11px; color: #718096; font-family: monospace; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty-note { color: #a0aec0; font-size: 13px; padding: 20px; text-align: center; }
+  .heading-note { font-size: 11px; color: #718096; margin-top: 4px; }
+  .warn { background: #fffbeb; border: 1px solid #f6e05e; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #744210; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Ablation Experiment — Prompt Strategy Comparison</h1>
+  <p class="subtitle">25 test cases · 3 conditions · 75 total API calls · heading level fixed at H2 (##) throughout</p>
+
+  <div class="setup">
+    <h2>Configuration</h2>
+    <div class="setup-row">
+      <div>
+        <label>Model</label>
+        <select id="model-select">
+          <option value="qwen-turbo">qwen-turbo (faster, cheaper)</option>
+          <option value="qwen-plus" selected>qwen-plus (recommended)</option>
+          <option value="qwen-max">qwen-max (best quality)</option>
+        </select>
+      </div>
+      <div>
+        <label>DashScope API Key</label>
+        <input type="password" id="api-key" placeholder="sk-...">
+      </div>
+      <button class="run-btn" id="run-btn" onclick="startExperiment()">▶ Run Experiment</button>
+    </div>
+    <p class="heading-note" style="margin-top:10px">All three conditions use headingLevel = 2 (## as top-level heading). Heading compliance measures whether this constraint is obeyed.</p>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="dot dot-a"></div><strong>Condition A — Baseline:</strong> Single generic prompt, no few-shot examples, no type detection</div>
+    <div class="legend-item"><div class="dot dot-b"></div><strong>Condition B — Type-Specific:</strong> Auto-detected doc type + specialized prompt with few-shot example</div>
+    <div class="legend-item"><div class="dot dot-c"></div><strong>Condition C — Full Pipeline:</strong> Condition B + user style template injected</div>
+  </div>
+
+  <div class="progress-bar" id="progress-bar" style="display:none">
+    <div id="progress-label" class="progress-label">Starting...</div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Aggregate Metrics</div>
+    <div id="summary">
+      <div class="empty-note">Run the experiment to see results</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Per-Example Results</div>
+    <div class="results-wrap" id="results-wrap">
+      <div class="empty-note">Run the experiment to see results</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Shared helpers (mirrored from sidepanel.js) ─────────────────────────────
+
+function buildHeadingInstruction(level) {
+  const h = n => '#'.repeat(n);
+  return `标题层级规则：最高级标题使用 ${h(level)}（H${level}），二级标题使用 ${h(level+1)}，三级标题使用 ${h(level+2)}，文档中不得出现比 ${h(level)} 级别更高的标题。`;
+}
+
+class DocumentFeatureExtractor {
+  extract(text) {
+    const lines = text.split('\n');
+    const nonEmpty = lines.filter(l => l.trim().length > 0);
+    if (nonEmpty.length === 0) return this._empty();
+    const codeKwRx = /\b(function|class|def|const|let|var|return|import|from|select|if|for|while|public|private|void|int|float|double|bool|#include|namespace|struct|interface|extends|implements|fn|func|async|await|enum|impl|trait)\b/i;
+    const codeDensity = nonEmpty.filter(l => codeKwRx.test(l)).length / nonEmpty.length;
+    const indentDepth = Math.max(0, ...nonEmpty.map(l => {
+      const m = l.match(/^(\t+| +)/);
+      if (!m) return 0;
+      return m[0].includes('\t') ? m[0].length : Math.floor(m[0].length / 2);
+    }));
+    const upperRatio = nonEmpty.filter(l => {
+      const t = l.trim();
+      return t.length > 3 && t.length < 60 && t === t.toUpperCase() && /[A-Z]/.test(t);
+    }).length / nonEmpty.length;
+    const hasTable = lines.filter(l => l.trim().split(/\s{2,}/).filter(Boolean).length >= 3).length >= 2;
+    const avgLen = nonEmpty.reduce((s, l) => s + l.length, 0) / nonEmpty.length;
+    const dateRx = /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|Q[1-4]\s*\d{4}|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2})/i;
+    const hasDate = lines.some(l => dateRx.test(l));
+    const hasEmailHeaders = lines.some(l => /^(From|To|Subject|Cc|Bcc|Date)\s*:/i.test(l.trim()));
+    const numericDensity = (text.match(/\d/g) || []).length / Math.max(text.length, 1);
+    const proseSentenceRx = /^[A-Z][a-zA-Z].{38,}/;
+    const proseDensity = nonEmpty.filter(l => proseSentenceRx.test(l.trim())).length / nonEmpty.length;
+    const indentedCodeLines = nonEmpty.filter(l => /^(\s{2,}|\t)/.test(l) && codeKwRx.test(l));
+    const hasCodeBlock = indentedCodeLines.length >= 2;
+    const sqlStartRx = /^\s*(SELECT\b|FROM\s+\w|INSERT\s+INTO\b|UPDATE\s+\w|DELETE\s+FROM\b|CREATE\s+(TABLE|INDEX|VIEW)\b|WITH\s+\w+\s+AS\b|GROUP\s+BY\b|ORDER\s+BY\b|HAVING\b)/i;
+    const hasSqlBlock = nonEmpty.filter(l => sqlStartRx.test(l)).length >= 2;
+    const techDocPatterns = [
+      /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+\//i,
+      /^--[\w-]+/,
+      /^\w[\w.]*:\s+(int|str|string|bool|float|number|void|array|list|object|any)\b/i,
+      /^\w[\w.-]*\s{3,}(int|str|string|bool|float|number|array|list)\b/i,
+      /^[A-Z][A-Z_0-9]{3,}\b/,
+      /^[2-5]\d{2}\s+[A-Z][a-z]/,
+    ];
+    const hasTechPatterns = nonEmpty.filter(l => techDocPatterns.some(p => p.test(l.trim()))).length >= 2;
+    const meetKwRx = /\b(attendees?|action\s+items?|agenda|sprint\s+(review|planning|goal|retro)|retrospective|stand[\s-]?up|blockers?|next\s+steps?)\b/i;
+    const hasMeetingKeywords = meetKwRx.test(text);
+    const firstLine = (nonEmpty[0] || '').trim();
+    const firstLineIsTitle =
+      firstLine.length >= 3 && firstLine.length <= 50 &&
+      /\s/.test(firstLine) &&
+      !/[(){}[\];=<>@#]/.test(firstLine) &&
+      !/:$/.test(firstLine) &&
+      /[a-z]/.test(firstLine);
+    return { codeDensity, indentDepth, upperRatio, hasTable, avgLen, hasDate, hasEmailHeaders, numericDensity, proseDensity, hasCodeBlock, hasSqlBlock, hasTechPatterns, hasMeetingKeywords, firstLineIsTitle };
+  }
+  classify(f) {
+    if (f.numericDensity > 0.08 && f.hasTable) return { type: 'data_report', label: '数据报告' };
+    if (f.numericDensity > 0.13) return { type: 'data_report', label: '数据报告' };
+    if (f.hasDate && (f.upperRatio > 0.08 || f.avgLen < 50 || f.hasMeetingKeywords)) return { type: 'meeting_notes', label: '会议记录' };
+    if (f.hasEmailHeaders) return { type: 'meeting_notes', label: '会议记录' };
+    if (f.hasMeetingKeywords && f.upperRatio > 0.05) return { type: 'meeting_notes', label: '会议记录' };
+    if ((f.codeDensity > 0.15 || f.hasSqlBlock) && f.proseDensity < 0.20 && !f.firstLineIsTitle) return { type: 'code_snippet', label: '代码片段' };
+    if (f.firstLineIsTitle && f.indentDepth >= 3) return { type: 'technical_doc', label: '技术文档' };
+    if (f.codeDensity > 0.02 && f.indentDepth >= 2 && f.proseDensity < 0.50) return { type: 'technical_doc', label: '技术文档' };
+    if (f.hasCodeBlock && f.indentDepth >= 2) return { type: 'technical_doc', label: '技术文档' };
+    if (f.hasTechPatterns) return { type: 'technical_doc', label: '技术文档' };
+    return { type: 'general_prose', label: '通用文本' };
+  }
+  _empty() {
+    return { codeDensity: 0, indentDepth: 0, upperRatio: 0, hasTable: false, avgLen: 0, hasDate: false, hasEmailHeaders: false, numericDensity: 0 };
+  }
+}
+
+// ─── Prompt definitions ───────────────────────────────────────────────────────
+
+const BASELINE_SYSTEM = '你是一位专业的文档格式分析专家，请将用户提供的纯文本转换为格式规范的 Markdown 文档。';
+const BASELINE_TEMPLATE = `{HEADING_INSTRUCTION}
+
+请将以下纯文本转换为格式规范的 Markdown 文档。要求：
+1. 识别标题层级和文档结构
+2. 代码片段用 fenced code block 包裹并标注语言
+3. 识别列表、表格、链接
+4. 只输出 Markdown，不要添加解释
+
+待转换文本：
+{TEXT}`;
+
+const TYPE_CONFIGS = {
+  technical_doc: {
+    system: '你是专业的技术文档格式化专家，擅长将混合了代码、配置和说明的技术文本转换为规范 Markdown。',
+    template: `{HEADING_INSTRUCTION}
+
+将以下技术文档转换为 Markdown。规则：
+1. 代码、命令、配置内容用 fenced code block 包裹并标注语言
+2. 函数名、变量名、路径用 \`inline code\` 标记
+3. 参数/选项列表优先转为 Markdown 表格
+4. 保留所有技术细节，不做解释性改动
+
+示例输入：
+INSTALLATION
+    Requirements: Python 3.8+
+    pip install mylib
+    Config options
+        timeout: int  default 30
+        retry: bool   default True
+
+示例输出：
+## Installation
+**Requirements:** Python 3.8+
+\`\`\`bash
+pip install mylib
+\`\`\`
+### Config Options
+| 参数 | 类型 | 默认值 |
+|------|------|--------|
+| \`timeout\` | int | 30 |
+| \`retry\` | bool | True |
+
+---
+待转换文本：
+{TEXT}`
+  },
+  meeting_notes: {
+    system: '你是专业的会议记录整理助手，擅长将非结构化会议文本转换为结构清晰的 Markdown。',
+    template: `{HEADING_INSTRUCTION}
+
+将以下会议记录转换为 Markdown。规则：
+1. Action items / 待办事项转换为 GitHub 任务列表格式 \`- [ ] 内容\`
+2. 日期时间精确保留，不得修改
+3. 与会人员列为无序列表
+4. 决策结论用粗体标注
+
+示例输入：
+Sprint Review  2024-01-15
+Attendees: Alice, Bob
+Action Items
+    Alice: send report by Friday
+    Bob: fix the bug
+
+示例输出：
+## Sprint Review
+**日期：** 2024-01-15
+**与会人员：** Alice、Bob
+### Action Items
+- [ ] Alice：在周五前发送报告
+- [ ] Bob：修复 bug
+
+---
+待转换文本：
+{TEXT}`
+  },
+  code_snippet: {
+    system: '你是代码文档专家。输入文本主体是源代码，需要正确格式化为带语言标注的 Markdown 代码块。',
+    template: `{HEADING_INSTRUCTION}
+
+将以下内容转换为 Markdown。规则：
+1. 代码主体用 fenced code block 包裹并标注编程语言
+2. 注释和说明性文字保留在代码块外作为正文
+3. 多段代码之间用简短说明文字分隔
+4. 只输出 Markdown，不添加原文没有的解释
+
+---
+待转换文本：
+{TEXT}`
+  },
+  data_report: {
+    system: '你是数据报告格式化专家，擅长将含有大量数字、表格和统计数据的文本转换为规范 Markdown。',
+    template: `{HEADING_INSTRUCTION}
+
+将以下数据报告转换为 Markdown。规则：
+1. 对齐的列式数据必须转换为 Markdown 表格
+2. 所有数字和百分比精确保留，不得四舍五入或省略
+3. 关键指标用粗体标注
+
+---
+待转换文本：
+{TEXT}`
+  },
+  general_prose: {
+    system: '你是专业的文档格式化助手，将纯文本转换为格式规范的 Markdown。',
+    template: `{HEADING_INSTRUCTION}
+
+将以下文本转换为 Markdown。规则：
+1. 根据上方标题层级规则分配各级标题
+2. 识别并转换列表、链接、邮箱地址
+3. 保持原文语义，不添加原文没有的内容
+4. 只输出 Markdown，不要添加解释
+
+---
+待转换文本：
+{TEXT}`
+  }
+};
+
+// Style template injected for Condition C
+const STYLE_TEMPLATE = `## 示例章节
+
+这是一个标准段落，说明主要概念。
+
+### 子章节
+
+**关键点：** 重要内容用粗体标注。
+
+- 列表项使用短横线
+- 保持简洁
+- 避免过度嵌套
+
+\`\`\`python
+# 代码块带语言标注
+def example():
+    return "示例"
+\`\`\`
+
+| 列1 | 列2 | 说明 |
+|-----|-----|------|
+| 数据 | 数据 | 描述 |`;
+
+// ─── Test dataset (5 per type = 25 total) ────────────────────────────────────
+
+const TEST_CASES = [
+  // technical_doc × 5
+  { type: 'technical_doc', label: '技术文档', text: `REST API Authentication
+
+All requests must include an Authorization header with a Bearer token.
+
+Endpoints
+    GET /api/users
+        Returns list of users.
+        Params: limit (int, default 20), offset (int, default 0)
+        Response: 200 OK with users array
+
+    POST /api/users
+        Create new user.
+        Body: { name: string, email: string, role?: string }
+        Errors: 400 validation, 409 duplicate email
+
+Rate Limits
+    100 requests per minute per API key
+    Exceeded: 429 Too Many Requests with Retry-After header` },
+
+  { type: 'technical_doc', label: '技术文档', text: `Redis Cache Configuration
+
+    REDIS_HOST=localhost
+    REDIS_PORT=6379
+    REDIS_PASSWORD=your_password_here
+    REDIS_DB=0
+    REDIS_MAX_CONNECTIONS=20
+    REDIS_TIMEOUT=5000
+    REDIS_TTL_DEFAULT=3600
+
+TTL Values by Data Type
+    user_session      86400    24 hours
+    search_results    300      5 minutes
+    config_values     30       30 seconds
+    rate_limit        60       1 minute` },
+
+  { type: 'technical_doc', label: '技术文档', text: `WebSocket Event Reference
+
+    Client-to-Server Events
+        join_room      { roomId: string }
+        send_message   { roomId: string, content: string, type: 'text'|'image' }
+        leave_room     { roomId: string }
+        typing_start   { roomId: string }
+        typing_stop    { roomId: string }
+
+    Server-to-Client Events
+        message_received   { id, roomId, sender, content, timestamp }
+        user_joined        { roomId, user }
+        user_left          { roomId, userId }
+        room_updated       { roomId, changes }
+        error              { code, message }
+
+    Connection Setup
+        const socket = io(SERVER_URL, { auth: { token: JWT_TOKEN } });` },
+
+  { type: 'technical_doc', label: '技术文档', text: `Build and Deploy Pipeline
+
+    build:
+        docker build \
+            --build-arg VERSION=$(git describe --tags) \
+            --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            -t $(IMAGE):$(TAG) .
+
+    test:
+        docker run --rm $(IMAGE):$(TAG) npm test
+
+    push:
+        docker tag $(IMAGE):$(TAG) $(REGISTRY)/$(IMAGE):$(TAG)
+        docker push $(REGISTRY)/$(IMAGE):$(TAG)
+
+    deploy:
+        helm upgrade --install $(APP) ./charts/$(APP) \
+            --set image.tag=$(TAG) \
+            --set env=$(ENV) \
+            --namespace $(NAMESPACE) \
+            --wait --timeout 300s` },
+
+  { type: 'technical_doc', label: '技术文档', text: `Pagination API
+
+All list endpoints support cursor-based pagination.
+
+Request Parameters
+    cursor    string   Opaque cursor from previous response (omit for first page)
+    limit     int      Items per page, default 20, max 100
+    order     string   Sort field, default created_at
+    direction string   asc or desc, default desc
+
+Response Structure
+    {
+      "data": [...],
+      "pagination": {
+        "next_cursor": "eyJpZCI6MTIzfQ==",
+        "has_more": true,
+        "total_count": 847
+      }
+    }
+
+To fetch subsequent pages, pass next_cursor as the cursor parameter.` },
+
+  // meeting_notes × 5
+  { type: 'meeting_notes', label: '会议记录', text: `Sprint 18 Planning  2024-02-05  10am
+
+Attendees: Sarah (PM), Marcus (EM), 5 Engineers
+
+SPRINT GOAL
+    Complete SSO integration foundation and ship search improvements
+
+STORIES COMMITTED
+    #1842  SSO: SAML 2.0 implementation       13 pts
+    #1851  Search: result highlighting          5 pts
+    #1867  Search: filter persistence           3 pts
+    #1871  Perf: reduce API latency for /feed   8 pts
+    Total: 29 points (team capacity 32)
+
+ACTION ITEMS
+    Sarah: share SSO requirements doc by Feb 6
+    Marcus: assign #1842 to senior engineer today
+    All: review system design for SSO before Wednesday standup` },
+
+  { type: 'meeting_notes', label: '会议记录', text: `Quarterly Business Review  Q1 2024  April 10
+
+ATTENDEES
+    CEO, CTO, VP Product, VP Sales, VP Engineering, CFO
+
+Q1 RESULTS SUMMARY
+    Revenue: $3.73M vs $3.20M target (+16.6%)
+    Gross Margin: 71.3% (target 70%)
+    New Logos: 47 vs 40 target
+    NRR: 118% (target 115%)
+    Churn: 2.3% (target <3%)
+
+CONCERNS
+    Engineering velocity dropped 18% in March (two key engineers on leave)
+    Customer support SLA compliance at 89%, below 95% target
+
+DECISIONS
+    Hire 2 additional support engineers, priority for Q2
+    Conduct engineering capacity review before Q2 planning
+
+ACTION ITEMS
+    CTO: capacity analysis ready by April 15
+    HR: open support engineer reqs by April 12
+    VP Product: adjust Q2 roadmap for reduced eng capacity by April 17` },
+
+  { type: 'meeting_notes', label: '会议记录', text: `Technical Debt Review  March 22, 2024  2pm
+
+Attendees: CTO, 3 Tech Leads, 1 Architect
+
+ITEMS REVIEWED
+
+    High Priority
+        Legacy auth service (Node 14, EOL) — security risk
+        Monolithic job queue needs breaking apart — blocks scaling
+
+    Medium Priority
+        Frontend bundle size 2.8MB (target <1.5MB)
+        Missing database indexes on 6 high-traffic queries
+
+    Low Priority
+        Outdated internal library versions
+        Inconsistent error handling patterns
+
+DECISIONS
+    Allocate 20% of each sprint to tech debt starting Sprint 19
+    Auth service migration is P1, start Q2
+
+ACTION ITEMS
+    Arch: create auth migration RFC by March 29
+    FE Lead: bundle analysis and reduction plan by March 28
+    DB Lead: index audit and PR by March 25` },
+
+  { type: 'meeting_notes', label: '会议记录', text: `Customer Success Review  Feb 28 2024
+
+Attendees: CS Lead (Dana), Sales (Mike), Product (Elena)
+
+AT-RISK ACCOUNTS
+    Acme Corp (ARR $84K): unhappy with API rate limits, renewal in 45 days
+    TechStart (ARR $24K): low product adoption, 3 users out of 20 seats
+
+EXPANSION OPPORTUNITIES
+    GlobalFirm: considering upgrade to Enterprise (worth +$60K ARR)
+    DataCo: wants data export feature, would expand seat count significantly
+
+ACTION ITEMS
+    Dana: schedule EBR with Acme Corp this week, offer rate limit increase
+    Elena: add API rate limit flexibility to Q2 roadmap consideration
+    Dana: kick off activation campaign for TechStart with CS playbook
+    Mike: begin GlobalFirm expansion conversation, loop in solutions eng
+    Elena: get DataCo export requirements for scoping` },
+
+  { type: 'meeting_notes', label: '会议记录', text: `Post-Launch Review  v3.0  2024-01-19  3pm
+
+Attendees: Full product and engineering team (12 people)
+
+WHAT WENT WELL
+    Deployment went smoothly, zero rollbacks needed
+    Performance improvements exceeded targets (43% p95 reduction vs 30% goal)
+    Customer feedback on new dashboard overwhelmingly positive
+    Zero P1 incidents in first 7 days post-launch
+
+WHAT COULD IMPROVE
+    Documentation published 2 days late, caused support ticket spike
+    QA sign-off took 3 days longer than planned due to unclear criteria
+    Not all team members were aware of go-live timing
+
+ACTION ITEMS
+    PM: add doc deadline to release checklist as hard dependency
+    QA Lead: define written acceptance criteria template for future releases
+    EM: add launch comms to sprint planning as explicit task
+    Team: retrospective doc to be written and shared by Jan 26` },
+
+  // code_snippet × 5
+  { type: 'code_snippet', label: '代码片段', text: `async def fetch_with_retry(url: str, max_retries: int = 3) -> dict:
+    for attempt in range(max_retries):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    resp.raise_for_status()
+                    return await resp.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            if attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(2 ** attempt)` },
+
+  { type: 'code_snippet', label: '代码片段', text: `class Singleton:
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not hasattr(self, 'initialized'):
+            self.initialized = True
+            self.data = {}` },
+
+  { type: 'code_snippet', label: '代码片段', text: `function throttle(fn, limit) {
+    let lastCall = 0;
+    let timeout = null;
+
+    return function(...args) {
+        const now = Date.now();
+        const remaining = limit - (now - lastCall);
+
+        if (remaining <= 0) {
+            if (timeout) {
+                clearTimeout(timeout);
+                timeout = null;
+            }
+            lastCall = now;
+            return fn.apply(this, args);
+        }
+
+        if (!timeout) {
+            timeout = setTimeout(() => {
+                lastCall = Date.now();
+                timeout = null;
+                fn.apply(this, args);
+            }, remaining);
+        }
+    };
+}` },
+
+  { type: 'code_snippet', label: '代码片段', text: `WITH monthly_cohorts AS (
+    SELECT
+        DATE_TRUNC('month', first_active_date) AS cohort_month,
+        user_id
+    FROM users
+),
+activity AS (
+    SELECT
+        u.user_id,
+        c.cohort_month,
+        DATE_TRUNC('month', e.event_date) AS activity_month,
+        DATE_DIFF('month', c.cohort_month, DATE_TRUNC('month', e.event_date)) AS month_number
+    FROM events e
+    JOIN monthly_cohorts c USING (user_id)
+)
+SELECT
+    cohort_month,
+    month_number,
+    COUNT(DISTINCT user_id) AS active_users
+FROM activity
+GROUP BY 1, 2
+ORDER BY 1, 2;` },
+
+  { type: 'code_snippet', label: '代码片段', text: `pub async fn process_batch<T: Send + 'static>(
+    items: Vec<T>,
+    concurrency: usize,
+    processor: impl Fn(T) -> impl Future<Output = Result<(), Error>> + Send + Sync + 'static,
+) -> Vec<Result<(), Error>> {
+    let processor = Arc::new(processor);
+    let semaphore = Arc::new(Semaphore::new(concurrency));
+
+    let tasks: Vec<_> = items.into_iter().map(|item| {
+        let sem = semaphore.clone();
+        let proc = processor.clone();
+        tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            proc(item).await
+        })
+    }).collect();
+
+    futures::future::join_all(tasks)
+        .await
+        .into_iter()
+        .map(|r| r.unwrap_or_else(|e| Err(Error::TaskPanic(e.to_string()))))
+        .collect()
+}` },
+
+  // data_report × 5
+  { type: 'data_report', label: '数据报告', text: `Weekly Active Users  Week of April 8-14, 2024
+
+Day          WAU        New Users   Returning   Sessions
+Monday       18,420     1,204       17,216      52,840
+Tuesday      19,840     1,387       18,453      57,120
+Wednesday    21,300     1,498       19,802      62,440
+Thursday     20,180     1,344       18,836      58,920
+Friday       17,640     982         16,658      49,380
+Saturday     12,840     1,120       11,720      34,220
+Sunday       11,200     1,040       10,160      29,180
+Total (WAU)  121,420    8,575       112,845     344,100
+
+vs Prior Week: +8.4%   +12.3%      +7.9%       +9.1%` },
+
+  { type: 'data_report', label: '数据报告', text: `Q1 Infrastructure Costs vs Budget
+
+Service            Budget       Actual       Variance     % Over/Under
+Compute            $145,000     $154,300     +$9,300      +6.4%
+Database           $62,000      $67,200      +$5,200      +8.4%
+CDN                $18,000      $19,600      +$1,600      +8.9%
+Storage            $24,000      $26,500      +$2,500      +10.4%
+Networking         $12,000      $13,500      +$1,500      +12.5%
+Monitoring         $9,000       $9,700       +$700        +7.8%
+Other              $8,000       $8,800       +$800        +10.0%
+Total              $278,000     $299,600     +$21,600     +7.8%
+
+Primary driver of overage: unexpected 34% traffic growth in March` },
+
+  { type: 'data_report', label: '数据报告', text: `Benchmark Results  Search Service  April 2024
+
+Test Setup: 4 vCPU / 16 GB RAM / NVMe SSD, warm cache, 10k document index
+
+Query Type           QPS      p50 (ms)   p95 (ms)   p99 (ms)   CPU%
+Simple keyword       2,840    8          24          67         38%
+Multi-field query    1,920    14         48          124        52%
+Fuzzy search         1,240    22         89          247        71%
+Aggregation          840      38         142         389        84%
+Complex filter       680      51         198         542        91%
+
+vs Previous Version (v2.8)
+Simple keyword:    +22% QPS, -31% p99
+Aggregation:       +15% QPS, -28% p99
+Complex filter:    +8% QPS, -19% p99` },
+
+  { type: 'data_report', label: '数据报告', text: `Conversion Rate by Acquisition Channel  Q1 2024
+
+Channel              Visitors    Trials     Trial Rate   Paid Conv.   CAC
+Organic Search       84,200      6,740      8.0%         1,820        $0
+Paid Search (SEM)    31,840      4,780      15.0%        1,290        $124
+Product Hunt         8,420       2,106      25.0%        589          $0
+Referral             12,300      1,845      15.0%        499          $0
+Direct               41,280      3,302      8.0%         892          $0
+Social (paid)        18,600      1,302      7.0%         260          $248
+Email nurture        9,840       1,968      20.0%        689          $18
+Total               206,480     22,043     10.7%         6,039        $68` },
+
+  { type: 'data_report', label: '数据报告', text: `Reliability Report  March 2024
+
+Service SLA Compliance (target: 99.9%)
+Service              Uptime     Downtime    SLA Met    Incidents
+API Gateway          99.97%     13 min      Yes        1 (P2)
+Auth Service         100.00%    0 min       Yes        0
+Payment Service      99.99%     4 min       Yes        0
+Search               99.94%     35 min      No         2 (1×P2, 1×P3)
+Notifications        99.91%     47 min      No         1 (P2)
+
+MTTR by Priority
+    P1: N/A (no P1 incidents)
+    P2: 24 minutes average (3 incidents)
+    P3: 8 minutes average (1 incident)
+
+On-call pages: 4 total (1 false positive)` },
+
+  // general_prose × 5
+  { type: 'general_prose', label: '通用文本', text: `The Problem with Feature Flags
+
+Feature flags are a powerful technique for separating deployment from release. When used well, they let you ship code to production before it is visible to users, run gradual rollouts, and quickly disable a feature if something goes wrong.
+
+But feature flags accumulate. Developers add them and then forget to remove them. The codebase fills up with branching conditions that nobody fully understands. Testing becomes harder because the number of possible combinations grows exponentially.
+
+The discipline that makes feature flags work is treating them as temporary. Every flag should have a planned removal date. Cleaning up old flags should be a first-class engineering task, not something that happens when somebody finally gets annoyed enough.` },
+
+  { type: 'general_prose', label: '通用文本', text: `Understanding Our Pricing Model
+
+We offer three plans designed to fit teams of every size.
+
+The Starter plan is built for individuals and small teams just getting started. It includes the core features you need to be productive, with room to grow.
+
+The Professional plan adds advanced features like custom integrations, priority support, and higher usage limits. It is our most popular choice for growing teams.
+
+The Enterprise plan is designed for organizations that need additional security controls, compliance features, dedicated support, and custom contract terms. Pricing is customized based on your specific needs.
+
+All plans come with a 14-day free trial. No credit card required. You can switch plans or cancel at any time from your account settings.` },
+
+  { type: 'general_prose', label: '通用文本', text: `Why Documentation Matters
+
+Good documentation is one of the highest-leverage investments an engineering team can make. It reduces the time new engineers spend getting up to speed. It reduces interruptions for senior engineers who would otherwise be answering the same questions repeatedly. And it forces clarity of thought: you cannot write clearly about something you do not understand.
+
+The biggest obstacle to good documentation is the belief that writing it takes too much time. This calculation is usually wrong. The time spent writing a good document is almost always less than the cumulative time that would be spent answering questions, debugging misunderstandings, and reworking decisions made on incorrect assumptions.
+
+The second biggest obstacle is not knowing where to put things. A documentation strategy that everyone understands matters more than the quality of any individual document.` },
+
+  { type: 'general_prose', label: '通用文本', text: `What We Look for in Engineering Candidates
+
+We care deeply about how you think and how you work with others. We do not believe in trivia questions or algorithm puzzles that have no relationship to the actual work.
+
+Our interview process is designed to simulate the kind of work you would actually do here. You will talk through a system design problem to see how you approach ambiguity and tradeoffs. You will write code in a real environment with access to documentation. You will talk with your potential teammates about past projects and how you handle disagreement.
+
+We are looking for engineers who communicate clearly, who take ownership of outcomes rather than just tasks, and who make the people around them more effective. We believe strongly in giving honest and specific feedback after every interview, regardless of the outcome.` },
+
+  { type: 'general_prose', label: '通用文本', text: `The Value of Small Pull Requests
+
+Large pull requests are harder to review well. When a reviewer is faced with eight hundred lines of changes across twenty files, they cannot give each part the careful attention it deserves. They approve quickly to clear their queue, and the subtle bugs slip through.
+
+Small pull requests are not just easier to review. They are also faster to ship. A small change can go from idea to production in a few hours. A large change requires scheduling and coordination, accumulates merge conflicts, and sits in code review limbo while the author waits.
+
+The discipline of keeping pull requests small is mostly about breaking problems down. Almost every large change can be decomposed into a sequence of smaller changes, each of which moves the system forward without breaking anything.` },
+];
+
+// ─── Metric measurement ───────────────────────────────────────────────────────
+
+function measureOutput(output, expectedType) {
+  const headingLevel = 2; // fixed for all conditions
+  const h1Count = (output.match(/^# [^#]/gm) || []).length; // strict H1 detection
+  const codeBlocks = Math.floor((output.match(/^```/gm) || []).length / 2);
+  const taskItems = (output.match(/^- \[ \]/gm) || []).length;
+  const tableRows = (output.match(/^\|[-: |]+\|$/gm) || []).length; // separator rows = tables
+  const inlineCode = (output.match(/`[^`]+`/g) || []).length;
+  const headings = (output.match(/^#{1,6} /gm) || []).length;
+  const boldItems = (output.match(/\*\*[^*]+\*\*/g) || []).length;
+
+  const headingCompliant = h1Count === 0;
+
+  let typeScore = 0;
+  switch(expectedType) {
+    case 'code_snippet':    typeScore = codeBlocks > 0 ? 1 : 0; break;
+    case 'meeting_notes':   typeScore = taskItems > 0 ? 1 : 0; break;
+    case 'data_report':     typeScore = tableRows > 0 ? 1 : 0; break;
+    case 'technical_doc':   typeScore = (codeBlocks > 0 || tableRows > 0 || inlineCode > 0) ? 1 : 0; break;
+    case 'general_prose':   typeScore = headings > 0 ? 1 : 0; break;
+  }
+
+  return { headingCompliant, typeScore, codeBlocks, taskItems, tableRows, inlineCode, headings, boldItems };
+}
+
+// ─── API call ─────────────────────────────────────────────────────────────────
+
+async function callAPI(apiKey, model, system, prompt) {
+  const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
+      temperature: 0.3
+    })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  let result = data.choices[0].message.content;
+  result = result.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
+  if ((result.match(/^```/gm) || []).length % 2 !== 0) result = result.trimEnd() + '\n```';
+  return result;
+}
+
+// ─── Run experiment ────────────────────────────────────────────────────────────
+
+const extractor = new DocumentFeatureExtractor();
+let allResults = [];
+
+async function startExperiment() {
+  const apiKey = document.getElementById('api-key').value.trim();
+  const model = document.getElementById('model-select').value;
+  if (!apiKey) { alert('Please enter your DashScope API Key.'); return; }
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+
+  document.getElementById('progress-bar').style.display = 'block';
+  const totalCalls = TEST_CASES.length * 3;
+  let completedCalls = 0;
+
+  allResults = TEST_CASES.map(tc => ({ ...tc, a: null, b: null, c: null, error: null }));
+
+  // Build initial table
+  renderResultsTable(allResults);
+  renderSummary(allResults);
+
+  for (let i = 0; i < TEST_CASES.length; i++) {
+    const tc = TEST_CASES[i];
+    const hi = buildHeadingInstruction(2);
+    const features = extractor.extract(tc.text);
+    const detectedType = extractor.classify(features).type;
+
+    // Condition A: baseline
+    updateProgress(completedCalls, totalCalls, `[${i+1}/25] ${tc.label} — Condition A`);
+    try {
+      const prompt = BASELINE_TEMPLATE.replace('{HEADING_INSTRUCTION}', hi).replace('{TEXT}', tc.text);
+      const output = await callAPI(apiKey, model, BASELINE_SYSTEM, prompt);
+      allResults[i].a = { output, metrics: measureOutput(output, tc.type) };
+    } catch(e) { allResults[i].a = { error: e.message }; }
+    completedCalls++;
+    renderResultsTable(allResults);
+
+    // Condition B: type-specific
+    updateProgress(completedCalls, totalCalls, `[${i+1}/25] ${tc.label} — Condition B`);
+    try {
+      const cfg = TYPE_CONFIGS[detectedType] || TYPE_CONFIGS.general_prose;
+      const prompt = cfg.template.replace('{HEADING_INSTRUCTION}', hi).replace('{TEXT}', tc.text);
+      const output = await callAPI(apiKey, model, cfg.system, prompt);
+      allResults[i].b = { output, metrics: measureOutput(output, tc.type), detectedType };
+    } catch(e) { allResults[i].b = { error: e.message }; }
+    completedCalls++;
+    renderResultsTable(allResults);
+
+    // Condition C: type-specific + style template
+    updateProgress(completedCalls, totalCalls, `[${i+1}/25] ${tc.label} — Condition C`);
+    try {
+      const cfg = TYPE_CONFIGS[detectedType] || TYPE_CONFIGS.general_prose;
+      const prompt = cfg.template.replace('{HEADING_INSTRUCTION}', hi).replace('{TEXT}', tc.text)
+        + `\n\n## 用户风格参考\n\n以下是用户提供的 Markdown 风格样例，请模仿其格式习惯，但不要复制内容：\n\n${STYLE_TEMPLATE}\n\n**最终约束（优先级高于上方样例）：** ${hi}`;
+      const output = await callAPI(apiKey, model, cfg.system, prompt);
+      allResults[i].c = { output, metrics: measureOutput(output, tc.type), detectedType };
+    } catch(e) { allResults[i].c = { error: e.message }; }
+    completedCalls++;
+    renderResultsTable(allResults);
+    renderSummary(allResults);
+
+    // Brief pause to avoid rate limiting
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  updateProgress(totalCalls, totalCalls, 'Complete!');
+  btn.disabled = false;
+}
+
+function updateProgress(done, total, label) {
+  document.getElementById('progress-label').textContent = `${label} (${done}/${total} API calls)`;
+  document.getElementById('progress-fill').style.width = `${(done/total*100).toFixed(0)}%`;
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+
+const TAG_CLASS = { technical_doc:'tag-td', meeting_notes:'tag-mn', code_snippet:'tag-cs', data_report:'tag-dr', general_prose:'tag-gp' };
+
+function renderSummary(results) {
+  const completed = results.filter(r => r.a && r.b && r.c && !r.a.error && !r.b.error && !r.c.error);
+  if (completed.length === 0) { document.getElementById('summary').innerHTML = '<div class="empty-note">No completed results yet</div>'; return; }
+
+  const avg = (arr) => arr.length ? (arr.reduce((a,b) => a+b, 0) / arr.length * 100).toFixed(0) + '%' : '—';
+  const metrics = ['headingCompliant', 'typeScore'];
+  const metricLabels = { headingCompliant: '标题层级遵从率', typeScore: '类型专项得分' };
+
+  // Per-type type scores
+  const types = ['technical_doc','meeting_notes','code_snippet','data_report','general_prose'];
+  const typeLabels = { technical_doc:'技术文档', meeting_notes:'会议记录', code_snippet:'代码片段', data_report:'数据报告', general_prose:'通用文本' };
+
+  let html = '<div class="summary-grid">';
+
+  for (const metric of metrics) {
+    const aVals = completed.filter(r => r.a.metrics).map(r => r.a.metrics[metric] ? 1 : 0);
+    const bVals = completed.filter(r => r.b.metrics).map(r => r.b.metrics[metric] ? 1 : 0);
+    const cVals = completed.filter(r => r.c.metrics).map(r => r.c.metrics[metric] ? 1 : 0);
+    const aAvg = aVals.length ? (aVals.reduce((a,b)=>a+b,0)/aVals.length*100) : 0;
+    const bAvg = bVals.length ? (bVals.reduce((a,b)=>a+b,0)/bVals.length*100) : 0;
+    const cAvg = cVals.length ? (cVals.reduce((a,b)=>a+b,0)/cVals.length*100) : 0;
+    const bDelta = bAvg - aAvg;
+    const cDelta = cAvg - aAvg;
+    html += `<div class="metric-card">
+      <div class="metric-name">${metricLabels[metric]}</div>
+      <div class="metric-row">
+        <div><div class="metric-val val-a">${aAvg.toFixed(0)}%</div><div style="font-size:10px;color:#a0aec0">A</div></div>
+        <div><div class="metric-val val-b">${bAvg.toFixed(0)}%</div><div class="metric-delta ${bDelta>=0?'delta-pos':'delta-neg'}">${bDelta>=0?'+':''}${bDelta.toFixed(0)}pp</div></div>
+        <div><div class="metric-val val-c">${cAvg.toFixed(0)}%</div><div class="metric-delta ${cDelta>=0?'delta-pos':'delta-neg'}">${cDelta>=0?'+':''}${cDelta.toFixed(0)}pp</div></div>
+      </div>
+    </div>`;
+  }
+
+  // Per-type typeScore comparison
+  for (const t of types) {
+    const tr = completed.filter(r => r.type === t);
+    if (tr.length === 0) continue;
+    const s = cond => tr.filter(r => r[cond]?.metrics?.typeScore).length;
+    const aS = (s('a')/tr.length*100).toFixed(0);
+    const bS = (s('b')/tr.length*100).toFixed(0);
+    const cS = (s('c')/tr.length*100).toFixed(0);
+    html += `<div class="metric-card">
+      <div class="metric-name"><span class="tag-ct ${TAG_CLASS[t]}">${typeLabels[t]}</span><br><span style="font-size:10px">专项得分</span></div>
+      <div class="metric-row">
+        <div><div class="metric-val val-a">${aS}%</div><div style="font-size:10px;color:#a0aec0">A</div></div>
+        <div><div class="metric-val val-b">${bS}%</div></div>
+        <div><div class="metric-val val-c">${cS}%</div></div>
+      </div>
+    </div>`;
+  }
+
+  html += '</div>';
+  document.getElementById('summary').innerHTML = html;
+}
+
+function renderResultsTable(results) {
+  let html = `<table class="results">
+    <thead><tr>
+      <th>#</th><th>Type</th><th>Input</th>
+      <th>A: Heading ✓</th><th>A: Type ✓</th>
+      <th>B: Heading ✓</th><th>B: Type ✓</th><th>B: Detected</th>
+      <th>C: Heading ✓</th><th>C: Type ✓</th>
+    </tr></thead><tbody>`;
+
+  results.forEach((r, i) => {
+    const cell = (cond, metric) => {
+      const res = r[cond];
+      if (!res) return `<td class="pending">pending</td>`;
+      if (res.error) return `<td class="error-cell">⚠ ${res.error.slice(0,40)}</td>`;
+      const v = res.metrics[metric];
+      return `<td style="text-align:center">${v ? '<span class="check">✓</span>' : '<span class="cross">✗</span>'}</td>`;
+    };
+    const detected = (cond) => {
+      const res = r[cond];
+      if (!res || res.error || !res.detectedType) return '<td>—</td>';
+      const same = res.detectedType === r.type;
+      return `<td><span class="tag-ct ${TAG_CLASS[res.detectedType]}" style="font-size:11px">${{technical_doc:'Tech',meeting_notes:'Meet',code_snippet:'Code',data_report:'Data',general_prose:'Prose'}[res.detectedType]}${same ? '' : ' ⚠'}</span></td>`;
+    };
+    const preview = r.text.trim().slice(0, 80).replace(/</g,'&lt;');
+    html += `<tr>
+      <td>${i+1}</td>
+      <td><span class="tag-ct ${TAG_CLASS[r.type]}">${r.label}</span></td>
+      <td><div class="input-preview" title="${r.text.replace(/"/g,'&quot;')}">${preview}…</div></td>
+      ${cell('a','headingCompliant')}${cell('a','typeScore')}
+      ${cell('b','headingCompliant')}${cell('b','typeScore')}${detected('b')}
+      ${cell('c','headingCompliant')}${cell('c','typeScore')}
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('results-wrap').innerHTML = html;
+}
+</script>
+</body>
+</html>

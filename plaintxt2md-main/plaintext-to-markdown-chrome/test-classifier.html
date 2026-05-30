@@ -1,0 +1,1957 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>DocumentFeatureExtractor — Classifier Accuracy Test</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f7fafc; color: #2d3748; font-size: 14px; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { color: #718096; margin-bottom: 24px; font-size: 13px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .card { background: white; border-radius: 10px; padding: 18px; border: 1px solid #e2e8f0; text-align: center; }
+  .card-value { font-size: 32px; font-weight: 700; color: #667eea; }
+  .card-label { font-size: 12px; color: #718096; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .section { background: white; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px; overflow: hidden; }
+  .section-title { padding: 14px 20px; font-weight: 600; border-bottom: 1px solid #e2e8f0; background: #f7fafc; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #718096; }
+  .per-class { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .class-row { display: grid; grid-template-columns: 120px 1fr 80px 80px; gap: 12px; align-items: center; }
+  .class-name { font-weight: 600; font-size: 13px; }
+  .bar-bg { background: #e2e8f0; border-radius: 4px; height: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.5s; }
+  .bar-fill.low { background: linear-gradient(90deg, #f56565, #ed8936); }
+  .acc-val { font-weight: 700; font-size: 14px; text-align: right; }
+  .counts { font-size: 12px; color: #718096; text-align: right; }
+  /* Confusion matrix */
+  .matrix-wrap { padding: 20px; overflow-x: auto; }
+  table.matrix { border-collapse: collapse; min-width: 560px; }
+  .matrix th, .matrix td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: center; font-size: 12px; min-width: 80px; }
+  .matrix th { background: #f7fafc; font-weight: 600; }
+  .matrix td.diagonal { background: #ebf4ff; font-weight: 700; color: #3182ce; }
+  .matrix td.error { background: #fff5f5; color: #e53e3e; }
+  .matrix td.zero { color: #cbd5e0; }
+  .matrix td.label { background: #f7fafc; font-weight: 600; text-align: left; }
+  /* Failures */
+  .failures { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .failure-item { background: #fff5f5; border: 1px solid #fed7d7; border-radius: 8px; padding: 12px; }
+  .failure-header { display: flex; gap: 8px; margin-bottom: 6px; align-items: center; font-size: 12px; }
+  .tag { padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 11px; }
+  .tag.expected { background: #c6f6d5; color: #276749; }
+  .tag.got { background: #fed7d7; color: #9b2335; }
+  .failure-text { font-family: monospace; font-size: 11px; color: #4a5568; white-space: pre-wrap; background: #fff; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0; max-height: 80px; overflow: hidden; }
+  .features { font-size: 11px; color: #718096; margin-top: 4px; font-family: monospace; }
+  .run-btn { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 28px; }
+  .run-btn:hover { opacity: 0.9; }
+  .tag-ct { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .tag-td { background: #bee3f8; color: #2c5282; }
+  .tag-mn { background: #fefcbf; color: #744210; }
+  .tag-cs { background: #c6f6d5; color: #22543d; }
+  .tag-dr { background: #e9d8fd; color: #44337a; }
+  .tag-gp { background: #e2e8f0; color: #4a5568; }
+  .empty-note { color: #a0aec0; font-size: 13px; padding: 12px 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>DocumentFeatureExtractor — Classifier Accuracy Test</h1>
+  <p class="subtitle">100 labeled examples · 5 classes · no API calls required</p>
+  <button class="run-btn" onclick="runTests()">▶ Run All Tests</button>
+
+  <div class="summary-grid">
+    <div class="card"><div class="card-value" id="overall-acc">—</div><div class="card-label">Overall Accuracy</div></div>
+    <div class="card"><div class="card-value" id="total-pass">—</div><div class="card-label">Passed</div></div>
+    <div class="card"><div class="card-value" id="total-fail">—</div><div class="card-label">Failed</div></div>
+    <div class="card"><div class="card-value" id="total-n">100</div><div class="card-label">Total Examples</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Per-Class Accuracy</div>
+    <div class="per-class" id="per-class"><div class="empty-note">Run tests to see results</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Confusion Matrix (rows = actual, cols = predicted)</div>
+    <div class="matrix-wrap" id="matrix-wrap"><div class="empty-note">Run tests to see results</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Failed Examples (<span id="fail-count">0</span>)</div>
+    <div class="failures" id="failures"><div class="empty-note">No failures yet</div></div>
+  </div>
+</div>
+
+<script>
+// ─── Classifier (copy from sidepanel.js) ────────────────────────────────────
+
+class DocumentFeatureExtractor {
+  extract(text) {
+    const lines = text.split('\n');
+    const nonEmpty = lines.filter(l => l.trim().length > 0);
+    if (nonEmpty.length === 0) return this._empty();
+
+    const codeKwRx = /\b(function|class|def|const|let|var|return|import|from|select|if|for|while|public|private|void|int|float|double|bool|#include|namespace|struct|interface|extends|implements|fn|func|async|await|enum|impl|trait)\b/i;
+    const codeDensity = nonEmpty.filter(l => codeKwRx.test(l)).length / nonEmpty.length;
+
+    const indentDepth = Math.max(0, ...nonEmpty.map(l => {
+      const m = l.match(/^(\t+| +)/);
+      if (!m) return 0;
+      return m[0].includes('\t') ? m[0].length : Math.floor(m[0].length / 2);
+    }));
+
+    const upperRatio = nonEmpty.filter(l => {
+      const t = l.trim();
+      return t.length > 3 && t.length < 60 && t === t.toUpperCase() && /[A-Z]/.test(t);
+    }).length / nonEmpty.length;
+
+    const hasTable = lines.filter(l => l.trim().split(/\s{2,}/).filter(Boolean).length >= 3).length >= 2;
+    const avgLen = nonEmpty.reduce((s, l) => s + l.length, 0) / nonEmpty.length;
+
+    const dateRx = /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|Q[1-4]\s*\d{4}|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2})/i;
+    const hasDate = lines.some(l => dateRx.test(l));
+    const hasEmailHeaders = lines.some(l => /^(From|To|Subject|Cc|Bcc|Date)\s*:/i.test(l.trim()));
+    const numericDensity = (text.match(/\d/g) || []).length / Math.max(text.length, 1);
+
+    const proseSentenceRx = /^[A-Z][a-zA-Z].{38,}/;
+    const proseDensity = nonEmpty.filter(l => proseSentenceRx.test(l.trim())).length / nonEmpty.length;
+
+    const indentedCodeLines = nonEmpty.filter(l => /^(\s{2,}|\t)/.test(l) && codeKwRx.test(l));
+    const hasCodeBlock = indentedCodeLines.length >= 2;
+
+    const sqlStartRx = /^\s*(SELECT\b|FROM\s+\w|INSERT\s+INTO\b|UPDATE\s+\w|DELETE\s+FROM\b|CREATE\s+(TABLE|INDEX|VIEW)\b|WITH\s+\w+\s+AS\b|GROUP\s+BY\b|ORDER\s+BY\b|HAVING\b)/i;
+    const hasSqlBlock = nonEmpty.filter(l => sqlStartRx.test(l)).length >= 2;
+
+    const techDocPatterns = [
+      /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+\//i,
+      /^--[\w-]+/,
+      /^\w[\w.]*:\s+(int|str|string|bool|float|number|void|array|list|object|any)\b/i,
+      /^\w[\w.-]*\s{3,}(int|str|string|bool|float|number|array|list)\b/i,
+      /^[A-Z][A-Z_0-9]{3,}\b/,
+      /^[2-5]\d{2}\s+[A-Z][a-z]/,
+    ];
+    const hasTechPatterns = nonEmpty.filter(l => techDocPatterns.some(p => p.test(l.trim()))).length >= 2;
+
+    const meetKwRx = /\b(attendees?|action\s+items?|agenda|sprint\s+(review|planning|goal|retro)|retrospective|stand[\s-]?up|blockers?|next\s+steps?)\b/i;
+    const hasMeetingKeywords = meetKwRx.test(text);
+
+    // First line is a descriptive title (multi-word phrase, no code punctuation)
+    // This separates technical docs (start with a title) from raw code (starts with code)
+    const firstLine = (nonEmpty[0] || '').trim();
+    const firstLineIsTitle =
+      firstLine.length >= 3 && firstLine.length <= 50 &&
+      /\s/.test(firstLine) &&              // has a space (multi-word)
+      !/[(){}[\];=<>@#]/.test(firstLine) && // no code punctuation
+      !/:$/.test(firstLine) &&             // not ending with a colon
+      /[a-z]/.test(firstLine);             // has lowercase (excludes ALL-CAPS headers)
+
+    return { codeDensity, indentDepth, upperRatio, hasTable, avgLen, hasDate, hasEmailHeaders, numericDensity, proseDensity, hasCodeBlock, hasSqlBlock, hasTechPatterns, hasMeetingKeywords, firstLineIsTitle };
+  }
+
+  classify(f) {
+    if (f.numericDensity > 0.08 && f.hasTable) return { type: 'data_report' };
+    if (f.numericDensity > 0.13) return { type: 'data_report' };
+    if (f.hasDate && (f.upperRatio > 0.08 || f.avgLen < 50 || f.hasMeetingKeywords)) return { type: 'meeting_notes' };
+    if (f.hasEmailHeaders) return { type: 'meeting_notes' };
+    if (f.hasMeetingKeywords && f.upperRatio > 0.05) return { type: 'meeting_notes' };
+    // code_snippet: code-heavy AND does NOT open with a descriptive title line
+    if ((f.codeDensity > 0.15 || f.hasSqlBlock) && f.proseDensity < 0.20 && !f.firstLineIsTitle) return { type: 'code_snippet' };
+    // technical_doc: opens with a title and contains an indented code/config block
+    if (f.firstLineIsTitle && f.indentDepth >= 3) return { type: 'technical_doc' };
+    if (f.codeDensity > 0.02 && f.indentDepth >= 2 && f.proseDensity < 0.50) return { type: 'technical_doc' };
+    if (f.hasCodeBlock && f.indentDepth >= 2) return { type: 'technical_doc' };
+    if (f.hasTechPatterns) return { type: 'technical_doc' };
+    return { type: 'general_prose' };
+  }
+
+  _empty() {
+    return { codeDensity: 0, indentDepth: 0, upperRatio: 0, hasTable: false, avgLen: 0, hasDate: false, hasEmailHeaders: false, numericDensity: 0 };
+  }
+}
+
+// ─── Test Dataset (100 labeled examples) ─────────────────────────────────────
+
+const DATASET = [
+
+// ── technical_doc (20) ───────────────────────────────────────────────────────
+{ type: 'technical_doc', text: `REST API Reference
+
+Authentication
+    All requests require a Bearer token in the Authorization header.
+
+GET /api/v2/users
+    Returns paginated list of users.
+    Query params:
+        limit   int   default 20
+        offset  int   default 0
+        active  bool  default true
+
+POST /api/v2/users
+    Creates a new user account.
+    Body: { name: string, email: string, role?: string }
+    Returns: 201 Created with user object` },
+
+{ type: 'technical_doc', text: `Installation Guide
+
+Requirements: Node.js 18+, npm 9+
+
+    npm install @myorg/sdk
+
+    Configuration
+        Create .env file in project root:
+            API_URL=https://api.example.com
+            API_KEY=your_key_here
+            TIMEOUT=5000
+            RETRY_COUNT=3` },
+
+{ type: 'technical_doc', text: `WebhookHandler Class
+
+    class WebhookHandler:
+        def __init__(self, secret: str, endpoint: str):
+            self.secret = secret
+            self.endpoint = endpoint
+
+        def verify_signature(self, payload: bytes, sig: str) -> bool:
+            expected = hmac.new(self.secret.encode(), payload, sha256)
+            return hmac.compare_digest(expected.hexdigest(), sig)` },
+
+{ type: 'technical_doc', text: `Database Schema — users table
+
+    CREATE TABLE users (
+        id          BIGSERIAL PRIMARY KEY,
+        email       VARCHAR(255) UNIQUE NOT NULL,
+        password    VARCHAR(60) NOT NULL,
+        role        user_role DEFAULT 'viewer',
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_users_email ON users(email);` },
+
+{ type: 'technical_doc', text: `CLI Reference
+
+    myapp [command] [options]
+
+    Commands
+        init        Initialize a new project
+        build       Compile source files
+        deploy      Push to remote environment
+        rollback    Revert to previous version
+
+    Global Options
+        --config    Path to config file  default .myapprc
+        --verbose   Enable debug logging
+        --dry-run   Simulate without executing
+        --env       Target environment   default production` },
+
+{ type: 'technical_doc', text: `Middleware Setup
+
+    app.use(cors({
+        origin: process.env.ALLOWED_ORIGINS.split(','),
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE']
+    }));
+
+    app.use(rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 100,
+        message: 'Too many requests'
+    }));` },
+
+{ type: 'technical_doc', text: `Error Codes Reference
+
+    4xx Client Errors
+        400  Bad Request       Malformed request body or missing required fields
+        401  Unauthorized      Missing or invalid API key
+        403  Forbidden         Insufficient permissions for this resource
+        404  Not Found         Resource does not exist
+        409  Conflict          Duplicate entry, unique constraint violated
+        429  Too Many Requests Rate limit exceeded, retry after header present
+
+    5xx Server Errors
+        500  Internal Server Error  Unexpected error, contact support
+        503  Service Unavailable    Scheduled maintenance or overload` },
+
+{ type: 'technical_doc', text: `Docker Compose Setup
+
+    services:
+      api:
+        build: .
+        ports:
+          - "3000:3000"
+        environment:
+          NODE_ENV: production
+          DB_URL: postgres://user:pass@db:5432/mydb
+        depends_on:
+          - db
+      db:
+        image: postgres:15
+        volumes:
+          - pgdata:/var/lib/postgresql/data` },
+
+{ type: 'technical_doc', text: `OAuth2 Authentication Flow
+
+    Step 1: Redirect user to authorization URL
+        https://auth.example.com/authorize
+            ?client_id=YOUR_CLIENT_ID
+            &redirect_uri=https://yourapp.com/callback
+            &response_type=code
+            &scope=read write
+            &state=RANDOM_STATE_VALUE
+
+    Step 2: Exchange code for tokens
+        POST /oauth/token
+        Content-Type: application/x-www-form-urlencoded
+
+        grant_type=authorization_code
+        &code=RECEIVED_CODE
+        &client_id=YOUR_CLIENT_ID
+        &client_secret=YOUR_CLIENT_SECRET` },
+
+{ type: 'technical_doc', text: `Performance Tuning Guide
+
+    Connection Pool Settings
+        pool.min_connections = 5
+        pool.max_connections = 20
+        pool.acquire_timeout = 30000
+        pool.idle_timeout = 600000
+
+    Query Optimization
+        Enable query result caching for read-heavy routes
+        Add indexes on columns used in WHERE clauses
+        Use SELECT with explicit columns instead of SELECT *
+        Batch inserts with INSERT ... VALUES (...), (...), (...)` },
+
+{ type: 'technical_doc', text: `useDataFetcher Hook
+
+    function useDataFetcher(endpoint, options = {}) {
+        const [data, setData] = useState(null);
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState(null);
+
+        useEffect(() => {
+            setLoading(true);
+            fetch(endpoint, options)
+                .then(r => r.json())
+                .then(setData)
+                .catch(setError)
+                .finally(() => setLoading(false));
+        }, [endpoint]);
+
+        return { data, loading, error };
+    }` },
+
+{ type: 'technical_doc', text: `Makefile Targets
+
+    build:
+        go build -ldflags "-s -w" -o bin/server ./cmd/server
+
+    test:
+        go test ./... -race -coverprofile=coverage.out
+
+    lint:
+        golangci-lint run ./...
+
+    docker-push:
+        docker build -t $(IMAGE):$(TAG) .
+        docker push $(IMAGE):$(TAG)
+
+    migrate-up:
+        goose -dir migrations postgres "$(DB_URL)" up` },
+
+{ type: 'technical_doc', text: `Retry Policy Configuration
+
+    RetryConfig
+        max_attempts     int    Maximum number of retry attempts  default 3
+        initial_delay    ms     Initial backoff delay              default 1000
+        max_delay        ms     Maximum backoff delay              default 30000
+        backoff_factor   float  Multiplier for each retry          default 2.0
+        retry_on         list   HTTP status codes to retry on
+
+    Example:
+        retry_on: [429, 500, 502, 503, 504]
+        max_attempts: 5
+        initial_delay: 500
+        backoff_factor: 1.5` },
+
+{ type: 'technical_doc', text: `Event System Architecture
+
+    Publishers emit typed events via EventBus.emit(type, payload).
+    Subscribers register handlers with EventBus.on(type, handler).
+
+    Built-in event types
+        user.created      Fired after new user persisted to DB
+        user.updated      Fired after profile changes saved
+        order.placed      Fired when payment confirmed
+        order.shipped     Fired when fulfillment updates tracking
+
+    Handler signature:
+        async (event: Event<T>) => void
+        event.type: string
+        event.payload: T
+        event.timestamp: Date` },
+
+{ type: 'technical_doc', text: `Nginx Config for SPA
+
+    server {
+        listen 80;
+        server_name example.com;
+        root /var/www/html;
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        location /api/ {
+            proxy_pass http://backend:3000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+
+        location ~* \.(js|css|png|jpg)$ {
+            expires 1y;
+            add_header Cache-Control public;
+        }
+    }` },
+
+{ type: 'technical_doc', text: `Caching Strategy
+
+    Cache layers (outermost to innermost)
+        CDN         Static assets, TTL 1 year
+        Nginx       Proxied responses, TTL 5 minutes
+        Redis       Application data, TTL configurable per key
+        In-process  Hot config values, TTL 30 seconds
+
+    Cache invalidation
+        use cache.del(key) for explicit invalidation
+        use cache.set(key, value, ttl) to update with new TTL
+        Tag-based invalidation: cache.invalidateTag('user:123')` },
+
+{ type: 'technical_doc', text: `GraphQL Schema Types
+
+    type User {
+        id: ID!
+        email: String!
+        profile: Profile
+        posts(limit: Int, offset: Int): [Post!]!
+        createdAt: DateTime!
+    }
+
+    type Profile {
+        displayName: String
+        avatarUrl: String
+        bio: String
+    }
+
+    type Mutation {
+        createUser(input: CreateUserInput!): User!
+        updateProfile(userId: ID!, input: UpdateProfileInput!): Profile!
+        deleteUser(id: ID!): Boolean!
+    }` },
+
+{ type: 'technical_doc', text: `Test Setup with Jest
+
+    module.exports = {
+        testEnvironment: 'node',
+        setupFilesAfterFramework: ['./tests/setup.js'],
+        globalSetup: './tests/globalSetup.js',
+        globalTeardown: './tests/globalTeardown.js',
+        coverageThreshold: {
+            global: { branches: 80, functions: 90, lines: 90 }
+        },
+        moduleNameMapper: {
+            '^@/(.*)$': '<rootDir>/src/$1'
+        }
+    };` },
+
+{ type: 'technical_doc', text: `Message Queue Worker
+
+    class QueueWorker:
+        def __init__(self, queue_name: str, concurrency: int = 5):
+            self.queue_name = queue_name
+            self.concurrency = concurrency
+            self.handlers = {}
+
+        def register(self, task_type: str, handler):
+            self.handlers[task_type] = handler
+
+        async def process(self, message: dict):
+            handler = self.handlers.get(message['type'])
+            if not handler:
+                raise ValueError(f"Unknown task type: {message['type']}")
+            await handler(message['payload'])` },
+
+{ type: 'technical_doc', text: `Feature Flag Configuration
+
+    Features are controlled via environment variables or remote config.
+
+    Flag naming convention: FEATURE_{MODULE}_{FLAG_NAME}
+
+        FEATURE_AUTH_SOCIAL_LOGIN     bool  default false
+        FEATURE_BILLING_ANNUAL_PLAN   bool  default true
+        FEATURE_UI_DARK_MODE          bool  default false
+        FEATURE_API_RATE_LIMIT_V2     bool  default false
+
+    To check a flag in code:
+        if featureFlags.isEnabled('auth.social_login'):
+            show_social_buttons()` },
+
+// ── meeting_notes (20) ───────────────────────────────────────────────────────
+{ type: 'meeting_notes', text: `Sprint 24 Review  2024-04-12  2:00PM - 3:30PM
+
+Attendees: Sarah Chen, Marcus Webb, Priya Nair, Tom Liu, Dana Park
+
+SPRINT SUMMARY
+    Velocity: 38 points (target 35)
+    Stories completed: 12 of 14
+    Bugs fixed: 8
+
+DEMOS
+    Sarah: New onboarding flow — stakeholders approved
+    Marcus: API rate limiting — pending security review
+
+DECISIONS
+    Delay story #204 to Sprint 25, dependencies not resolved
+    Launch date confirmed: May 3rd
+
+ACTION ITEMS
+    Marcus: complete security review by 2024-04-15
+    Priya: update documentation before launch
+    Tom: schedule customer beta testing for April 22nd` },
+
+{ type: 'meeting_notes', text: `Daily Standup  Jan 8, 2024  9:15AM
+
+Attendees: Alice, Bob, Carol, Dave
+
+UPDATES
+
+    Alice
+        Yesterday: finished PR for search pagination
+        Today: will write unit tests
+        Blockers: none
+
+    Bob
+        Yesterday: investigated memory leak in prod
+        Today: deploying hotfix to staging
+        Blockers: need access to prod logs, Carol to grant
+
+    Carol
+        Yesterday: design review with product team
+        Today: revising mockups per feedback
+        Blockers: none
+
+ACTION ITEMS
+    Carol: grant Bob prod log access today` },
+
+{ type: 'meeting_notes', text: `Architecture Review  2024-03-20
+
+Attendees: CTO, Lead Engineers (4), Platform Team
+
+PROPOSAL: Migrate from monolith to microservices
+
+DISCUSSION
+    Current pain points: slow deployments, team coupling, scaling issues
+    Proposed timeline: 6 months phased migration
+    Risk: data consistency during transition period
+    Mitigation: strangler fig pattern, event sourcing for audit trail
+
+DECISIONS
+    Approved to start with billing service extraction (lowest risk)
+    API gateway selection: defer to separate RFC
+    Do not migrate auth service until Q3
+
+ACTION ITEMS
+    Lead Eng: write migration RFC by March 28
+    CTO: review RFC and schedule board presentation
+    Platform: benchmark current system throughput as baseline` },
+
+{ type: 'meeting_notes', text: `Q2 Planning Session  2024-04-01  All day
+
+ATTENDEES
+    Product: Elena, James
+    Eng: Full team (8)
+    Design: Mia
+
+THEMES FOR Q2
+    1. Performance improvements
+    2. Mobile app parity
+    3. Enterprise features
+
+ROADMAP DECISIONS
+    P1: SSO integration (enterprise requirement, 3 customers blocked)
+    P2: Dashboard redesign (NPS feedback driver)
+    P3: Bulk import/export (nice to have)
+
+ACTION ITEMS
+    Elena: finalize Q2 OKRs by April 5th
+    James: customer interviews for SSO requirements, complete by April 8th
+    Mia: begin wireframes for dashboard redesign
+    Eng: estimate P1 stories by April 3rd` },
+
+{ type: 'meeting_notes', text: `Customer Feedback Session  March 15 2024
+
+Customer: Acme Corp (Jane Smith, Head of Engineering)
+Internal: Sales (Mike), Product (Priya), CS (Dana)
+
+FEEDBACK THEMES
+
+    Positive
+        API reliability much better than last quarter
+        New search feature saves significant time
+
+    Concerns
+        Bulk export limited to 10,000 rows (need 500k+)
+        SSO integration not available (blocks enterprise rollout)
+        Documentation outdated, missing new endpoints
+
+    Feature Requests
+        Audit log export
+        Custom webhook retry configuration
+        SCIM provisioning support
+
+ACTION ITEMS
+    Mike: send proposal for enterprise tier to Jane by March 20
+    Priya: add bulk export to Q2 roadmap, schedule scoping
+    Dana: update documentation for new endpoints this week` },
+
+{ type: 'meeting_notes', text: `Incident Retrospective  2024-02-28
+
+Incident: Database outage Feb 26, 14:32 - 16:17 UTC (1h 45m)
+Severity: P1  Impact: 100% of users
+
+TIMELINE
+    14:32  Automated alert: DB connection pool exhausted
+    14:38  On-call engineer paged
+    14:55  Root cause identified: connection leak in new deploy
+    15:10  Rolled back to previous version
+    16:17  Service fully restored
+
+ROOT CAUSE
+    Memory leak in ORM connection handling introduced in v2.14.1
+    Not caught by staging (different connection pool size)
+
+ACTION ITEMS
+    Platform: match staging DB config to production by March 5
+    Security: add connection pool monitoring alert before March 1
+    Eng: write runbook for DB connection issues
+    All: schedule chaos engineering exercise for April` },
+
+{ type: 'meeting_notes', text: `1:1 Check-in  Alex & Manager  Feb 14, 2024
+
+CAREER DEVELOPMENT
+    Alex wants to move toward tech lead role in 12-18 months
+    Interested in more cross-team projects for visibility
+
+CURRENT PROJECTS
+    Payment service refactor going well, on track
+    Struggling with stakeholder communication in project X
+
+FEEDBACK
+    Manager: Alex needs to speak up more in design reviews
+    Alex: Would like earlier access to product specs
+
+ACTION ITEMS
+    Manager: include Alex in next architecture discussion (March meeting)
+    Alex: prepare 5-minute design proposal for next 1:1
+    Manager: connect Alex with senior engineer as informal mentor` },
+
+{ type: 'meeting_notes', text: `All-Hands Meeting  Q1 2024  April 4, 9:00AM
+
+AGENDA
+    Company update (CEO)
+    Q1 results review
+    Q2 priorities
+    Team recognition
+    Open Q&A
+
+Q1 HIGHLIGHTS
+    ARR grew 34% YoY
+    Net promoter score: 67 (up from 52 last quarter)
+    Shipped 3 major features, resolved 94% of P1 bugs
+
+Q2 PRIORITIES
+    Enterprise expansion (target: 5 new enterprise logos)
+    Platform performance (reduce p99 latency by 40%)
+    Team growth (8 open headcount)
+
+ACTION ITEMS
+    All managers: headcount planning submitted by April 12
+    HR: finalize Q2 hiring plan by April 10
+    Product: Q2 roadmap published internally by April 8` },
+
+{ type: 'meeting_notes', text: `Product Roadmap Review  2024-01-22  3pm
+
+ATTENDEES: Product, Engineering Leads, Design, Sales
+
+ITEMS REVIEWED
+
+    Feature A: Advanced Analytics Dashboard
+        Status: 70% complete
+        ETA: Feb 15
+        Risk: Data pipeline dependency not yet unblocked
+
+    Feature B: Team Collaboration Tools
+        Status: Design approved, dev not started
+        ETA: March 30
+        Dependency: Requires Feature A completion
+
+    Feature C: Mobile Notifications
+        Status: On hold
+        Reason: Backend infra changes needed first
+
+ACTION ITEMS
+    PM: unblock data pipeline with infra team by Jan 25
+    Eng Lead: revise timeline for Feature B given dependency
+    Design: begin mobile notification wireframes regardless of hold` },
+
+{ type: 'meeting_notes', text: `Security Review Meeting  March 5, 2024
+
+Attendees: CISO, Lead Engineer, DevOps, External Auditor
+
+AUDIT FINDINGS
+
+    Critical (must fix before next release)
+        SQL injection vulnerability in search endpoint
+        Session tokens not expiring correctly
+
+    High Priority
+        Dependencies with known CVEs (7 found)
+        Logging PII in production error logs
+
+    Medium
+        Missing rate limiting on password reset endpoint
+        CORS policy too permissive
+
+ACTION ITEMS
+    Eng: patch SQL injection this week, deploy Friday
+    Eng: fix session expiry bug, PR by March 8
+    DevOps: update all dependencies with CVEs by March 12
+    Eng: strip PII from error logs, PR by March 10` },
+
+{ type: 'meeting_notes', text: `Design Review  2024-02-01  2pm
+
+ATTENDEES: Mia (Lead Designer), Product, 2 Engineers, QA
+
+DESIGNS REVIEWED
+    New checkout flow (3 screens)
+    Mobile responsive navigation
+    Error state library
+
+FEEDBACK
+
+    Checkout flow
+        Good: streamlined to 3 steps from 5
+        Change: add progress indicator on step 2
+        Change: CTA button color too similar to warning state
+
+    Navigation
+        Approved as-is
+        Engineering flagged: animation may cause performance issues on low-end devices
+
+ACTION ITEMS
+    Mia: revise checkout CTA color by Feb 5
+    Mia: add progress indicator to step 2
+    Eng: prototype navigation animation, test on target devices` },
+
+{ type: 'meeting_notes', text: `Partner Integration Sync  Jan 30 2024
+
+Partners: Stripe (Sarah), Twilio (Ben)
+Internal: Engineering (3), Product (Priya)
+
+STRIPE INTEGRATION STATUS
+    Payment links API: live in production
+    Subscription management: 80% complete, ETA Feb 20
+    Issue: webhook signature verification failing on some edge cases
+
+TWILIO STATUS
+    SMS verification: live
+    WhatsApp Business: planning phase
+    Issue: rate limits affecting OTP delivery during peak hours
+
+ACTION ITEMS
+    Stripe Sarah: share webhook edge case logs by Feb 2
+    Eng: investigate and patch webhook verification issue
+    Twilio Ben: propose rate limit increase for OTP endpoint
+    Priya: add WhatsApp to Q3 roadmap consideration` },
+
+{ type: 'meeting_notes', text: `Hiring Debrief  2024-03-18  4pm
+
+Role: Senior Backend Engineer
+Candidate: John Doe
+
+INTERVIEW PANEL
+    Alice (Eng): System design round
+    Bob (Eng): Coding challenge
+    Carol (EM): Values and culture
+    Dana (Product): Product thinking
+
+SCORES
+    Alice: Strong Hire — excellent distributed systems knowledge
+    Bob: Hire — solved efficiently, good code quality
+    Carol: Hire — collaborative, good communication
+    Dana: Lean No Hire — limited product curiosity
+
+DECISION: Hire (3 yes, 1 lean no)
+
+ACTION ITEMS
+    HR: send offer letter by March 20
+    Alice: reach out to John for questions before offer expires` },
+
+{ type: 'meeting_notes', text: `Budget Planning  FY2025  Oct 15 2024
+
+Attendees: CFO, CTO, VP Product, VP Sales, HR
+
+PROPOSED HEADCOUNT INCREASES
+    Engineering: +12 (8 IC, 3 EM, 1 Director)
+    Product: +4
+    Sales: +6
+    Total new headcount: 22
+
+OPEX ITEMS
+    Cloud infrastructure: +40% due to new regions
+    Tooling and licenses: +15%
+    Travel and offsites: restored to pre-2022 budget
+
+DECISIONS
+    Engineering headcount approved at +10 (2 deferred to Q2)
+    Product headcount approved as proposed
+    Cloud budget approved with quarterly review checkpoints
+
+ACTION ITEMS
+    HR: open first 5 engineering reqs by Oct 22
+    CTO: prioritize hiring plan by role
+    CFO: share updated model by Oct 18` },
+
+{ type: 'meeting_notes', text: `Release Planning  v3.2  2024-05-06
+
+Release Date: May 24, 2024
+Release Manager: Tom
+
+FEATURES INCLUDED
+    SSO with SAML 2.0
+    Bulk export up to 500k rows
+    API pagination improvements
+    Performance optimizations (38% p95 improvement)
+
+FEATURES DEFERRED
+    Audit log UI (moved to v3.3)
+    Custom webhook retry (needs more design work)
+
+GO/NO-GO CRITERIA
+    All P0 bugs resolved
+    Load testing passing at 2x baseline
+    Security review sign-off
+    Documentation updated
+
+ACTION ITEMS
+    QA: complete regression by May 20
+    Security: review SSO implementation by May 16
+    Tom: write customer communication for SSO launch
+    Docs: update API reference and migration guide by May 22` },
+
+{ type: 'meeting_notes', text: `Onboarding Session  New Hire: Kevin Park  March 4, 2024
+
+Buddy: Alice
+
+DAY 1 CHECKLIST REVIEW
+    All system access granted
+    Dev environment set up (took 2.5 hours, will improve docs)
+    Met team during standup
+
+FIRST WEEK PLAN
+    Day 1-2: read architecture docs and codebase overview
+    Day 3: shadow Alice on current feature
+    Day 4-5: first small PR (fix documentation or small bug)
+
+FEEDBACK FROM KEVIN
+    Onboarding docs missing local DB setup instructions
+    Slack channels not documented anywhere
+
+ACTION ITEMS
+    Alice: add Kevin to all relevant Slack channels
+    Kevin: submit PR fixing at least one doc gap found this week
+    HR: update onboarding checklist with DB setup steps` },
+
+{ type: 'meeting_notes', text: `Retrospective  Sprint 22  Feb 23 2024  4pm
+
+Attendees: Full team (7)
+
+WENT WELL
+    Deployment pipeline much faster after last sprint's work
+    Good collaboration between design and engineering on checkout flow
+    Zero P1 incidents this sprint
+
+COULD IMPROVE
+    PR review turnaround still too slow (avg 2 days)
+    Sprint planning ran 30 minutes over, need better preparation
+    Unclear ownership on infrastructure tickets
+
+ACTION ITEMS
+    Team: agree on 24-hour PR review SLA starting next sprint
+    EM: send pre-planning prep template before each sprint
+    Platform: assign clear DRI for each infrastructure component` },
+
+{ type: 'meeting_notes', text: `Vendor Evaluation  Database Selection  Apr 18 2024
+
+Attendees: CTO, 2 Senior Engineers, Platform Lead
+
+CANDIDATES EVALUATED
+    PlanetScale
+    CockroachDB
+    Aurora PostgreSQL
+
+EVALUATION CRITERIA
+    Cost at 10TB scale
+    Read/write latency p99
+    Operational complexity
+    Vendor lock-in risk
+    Migration path from existing PostgreSQL
+
+PRELIMINARY DECISION
+    Aurora PostgreSQL preferred — lowest migration risk, team familiarity
+    PlanetScale strong contender for new services
+
+ACTION ITEMS
+    Platform Lead: run 1-week benchmark on Aurora with production traffic copy
+    CTO: get pricing quotes from all three vendors by Apr 22
+    Senior Eng: write migration plan draft for Aurora by Apr 25` },
+
+{ type: 'meeting_notes', text: `Product-Engineering Sync  Weekly  2024-04-09
+
+Attendees: Elena (PM), James (PM), 3 Eng Leads
+
+TICKETS CLARIFIED
+    #2041 — Search ranking: use recency + engagement, not just recency
+    #2089 — Export format: CSV and XLSX both required, not either-or
+    #2103 — Empty state: show onboarding checklist, not blank screen
+
+PRIORITIES DISCUSSION
+    Eng concerned about #2089 scope creep (XLSX requires new dependency)
+    Agreed: XLSX in v1, CSV only for v1.0, XLSX added in v1.1
+
+NEW REQUESTS FROM PRODUCT
+    Analytics events on all new features (standard requirement going forward)
+    Dark mode setting stored server-side (not just localStorage)
+
+ACTION ITEMS
+    Elena: update #2089 ticket scope to CSV-only for this sprint
+    Eng Lead: estimate dark mode server storage work for next planning` },
+
+{ type: 'meeting_notes', text: `Technical Interview Debrief  Apr 2 2024
+
+Role: Staff Engineer
+Candidate: Maria Santos
+
+ROUNDS
+    System design: design a distributed rate limiter
+        Strong — proposed token bucket with Redis cluster, handled edge cases
+    Coding: implement LRU cache
+        Very strong — clean O(1) solution, good variable names, wrote tests
+    Leadership: prior team leadership and conflict resolution
+        Strong — clear examples, showed good judgment
+
+DISCUSSION NOTES
+    Concern: May be overqualified, risk of leaving in 1-2 years
+    Counter: exactly what we need for Platform team maturity
+    Compensation: will need senior band, approved budget exists
+
+DECISION: Strong Hire (unanimous)
+
+ACTION ITEMS
+    HR: prepare offer at senior band by April 4
+    CTO: reach out personally before formal offer` },
+
+// ── code_snippet (20) ────────────────────────────────────────────────────────
+{ type: 'code_snippet', text: `def binary_search(arr, target):
+    left, right = 0, len(arr) - 1
+    while left <= right:
+        mid = (left + right) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            left = mid + 1
+        else:
+            right = mid - 1
+    return -1` },
+
+{ type: 'code_snippet', text: `class EventEmitter {
+    constructor() {
+        this.listeners = new Map();
+    }
+
+    on(event, callback) {
+        if (!this.listeners.has(event)) {
+            this.listeners.set(event, []);
+        }
+        this.listeners.get(event).push(callback);
+        return () => this.off(event, callback);
+    }
+
+    emit(event, ...args) {
+        const handlers = this.listeners.get(event) || [];
+        handlers.forEach(fn => fn(...args));
+    }
+
+    off(event, callback) {
+        const handlers = this.listeners.get(event) || [];
+        this.listeners.set(event, handlers.filter(fn => fn !== callback));
+    }
+}` },
+
+{ type: 'code_snippet', text: `SELECT
+    u.id,
+    u.email,
+    COUNT(o.id) AS order_count,
+    SUM(o.total_amount) AS lifetime_value,
+    MAX(o.created_at) AS last_order_date
+FROM users u
+LEFT JOIN orders o ON o.user_id = u.id
+WHERE u.created_at >= NOW() - INTERVAL '90 days'
+    AND u.active = true
+GROUP BY u.id, u.email
+HAVING COUNT(o.id) > 0
+ORDER BY lifetime_value DESC
+LIMIT 100;` },
+
+{ type: 'code_snippet', text: `#!/bin/bash
+set -euo pipefail
+
+ENVIRONMENT=\${1:-staging}
+IMAGE_TAG=$(git rev-parse --short HEAD)
+REGISTRY="registry.example.com/myapp"
+
+echo "Deploying $IMAGE_TAG to $ENVIRONMENT..."
+
+docker build -t "$REGISTRY:$IMAGE_TAG" .
+docker push "$REGISTRY:$IMAGE_TAG"
+
+kubectl set image deployment/app \
+    app="$REGISTRY:$IMAGE_TAG" \
+    --namespace="$ENVIRONMENT"
+
+kubectl rollout status deployment/app \
+    --namespace="$ENVIRONMENT" \
+    --timeout=300s
+
+echo "Deploy complete."` },
+
+{ type: 'code_snippet', text: `type Result[T any] struct {
+    Value T
+    Err   error
+}
+
+func FetchUser(ctx context.Context, id int64) Result[*User] {
+    user := &User{}
+    err := db.QueryRowContext(ctx,
+        "SELECT id, email, name FROM users WHERE id = $1", id,
+    ).Scan(&user.ID, &user.Email, &user.Name)
+    if err == sql.ErrNoRows {
+        return Result[*User]{Err: ErrNotFound}
+    }
+    if err != nil {
+        return Result[*User]{Err: fmt.Errorf("db query: %w", err)}
+    }
+    return Result[*User]{Value: user}
+}` },
+
+{ type: 'code_snippet', text: `interface Repository<T, ID> {
+    findById(id: ID): Promise<T | null>;
+    findAll(filter?: Partial<T>): Promise<T[]>;
+    save(entity: T): Promise<T>;
+    delete(id: ID): Promise<void>;
+}
+
+class UserRepository implements Repository<User, string> {
+    constructor(private readonly db: Database) {}
+
+    async findById(id: string): Promise<User | null> {
+        return this.db.query('SELECT * FROM users WHERE id = $1', [id])
+            .then(rows => rows[0] ?? null);
+    }
+
+    async save(user: User): Promise<User> {
+        const { id, ...data } = user;
+        return this.db.upsert('users', { id }, data);
+    }
+}` },
+
+{ type: 'code_snippet', text: `@dataclass
+class Pipeline:
+    steps: list[Callable]
+
+    def run(self, input_data):
+        result = input_data
+        for step in self.steps:
+            try:
+                result = step(result)
+            except Exception as e:
+                raise PipelineError(f"Step {step.__name__} failed: {e}") from e
+        return result
+
+    def __or__(self, other_step):
+        return Pipeline(steps=self.steps + [other_step])
+
+pipeline = Pipeline([normalize]) | tokenize | embed | classify` },
+
+{ type: 'code_snippet', text: `const useDebounce = (value, delay = 300) => {
+    const [debouncedValue, setDebouncedValue] = useState(value);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedValue(value), delay);
+        return () => clearTimeout(timer);
+    }, [value, delay]);
+
+    return debouncedValue;
+};
+
+const SearchInput = ({ onSearch }) => {
+    const [query, setQuery] = useState('');
+    const debouncedQuery = useDebounce(query, 500);
+
+    useEffect(() => {
+        if (debouncedQuery) onSearch(debouncedQuery);
+    }, [debouncedQuery]);
+
+    return <input value={query} onChange={e => setQuery(e.target.value)} />;
+};` },
+
+{ type: 'code_snippet', text: `public class LRUCache<K, V> {
+    private final int capacity;
+    private final LinkedHashMap<K, V> cache;
+
+    public LRUCache(int capacity) {
+        this.capacity = capacity;
+        this.cache = new LinkedHashMap<>(capacity, 0.75f, true) {
+            protected boolean removeEldestEntry(Map.Entry<K,V> eldest) {
+                return size() > capacity;
+            }
+        };
+    }
+
+    public V get(K key) {
+        return cache.getOrDefault(key, null);
+    }
+
+    public void put(K key, V value) {
+        cache.put(key, value);
+    }
+}` },
+
+{ type: 'code_snippet', text: `fn merge_sort(arr: &mut Vec<i32>) {
+    let len = arr.len();
+    if len <= 1 { return; }
+
+    let mid = len / 2;
+    let mut left = arr[..mid].to_vec();
+    let mut right = arr[mid..].to_vec();
+
+    merge_sort(&mut left);
+    merge_sort(&mut right);
+
+    let (mut i, mut j, mut k) = (0, 0, 0);
+    while i < left.len() && j < right.len() {
+        if left[i] <= right[j] { arr[k] = left[i]; i += 1; }
+        else { arr[k] = right[j]; j += 1; }
+        k += 1;
+    }
+    while i < left.len() { arr[k] = left[i]; i += 1; k += 1; }
+    while j < right.len() { arr[k] = right[j]; j += 1; k += 1; }
+}` },
+
+{ type: 'code_snippet', text: `def decorator_with_args(retries=3, delay=1.0):
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(retries):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    if attempt < retries - 1:
+                        await asyncio.sleep(delay * (2 ** attempt))
+            raise last_error
+        return wrapper
+    return decorator
+
+@decorator_with_args(retries=5, delay=0.5)
+async def fetch_data(url: str) -> dict:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()` },
+
+{ type: 'code_snippet', text: `const middleware = (store) => (next) => (action) => {
+    if (typeof action === 'function') {
+        return action(store.dispatch, store.getState);
+    }
+
+    if (action.type?.startsWith('async/')) {
+        const { type, payload } = action;
+        store.dispatch({ type: type + '/pending' });
+        return Promise.resolve(payload)
+            .then(result => store.dispatch({ type: type + '/fulfilled', payload: result }))
+            .catch(err => store.dispatch({ type: type + '/rejected', error: err.message }));
+    }
+
+    return next(action);
+};` },
+
+{ type: 'code_snippet', text: `template <typename T>
+class ThreadSafeQueue {
+    std::queue<T> queue_;
+    mutable std::mutex mutex_;
+    std::condition_variable cond_;
+
+public:
+    void push(T value) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        queue_.push(std::move(value));
+        cond_.notify_one();
+    }
+
+    bool try_pop(T& value) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (queue_.empty()) return false;
+        value = std::move(queue_.front());
+        queue_.pop();
+        return true;
+    }
+
+    void wait_and_pop(T& value) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cond_.wait(lock, [this] { return !queue_.empty(); });
+        value = std::move(queue_.front());
+        queue_.pop();
+    }
+};` },
+
+{ type: 'code_snippet', text: `class CircuitBreaker:
+    CLOSED = 'closed'
+    OPEN = 'open'
+    HALF_OPEN = 'half_open'
+
+    def __init__(self, failure_threshold=5, recovery_timeout=60):
+        self.state = self.CLOSED
+        self.failure_count = 0
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.last_failure_time = None
+
+    def call(self, func, *args, **kwargs):
+        if self.state == self.OPEN:
+            if time.time() - self.last_failure_time > self.recovery_timeout:
+                self.state = self.HALF_OPEN
+            else:
+                raise CircuitOpenError("Circuit breaker is OPEN")
+
+        try:
+            result = func(*args, **kwargs)
+            self._on_success()
+            return result
+        except Exception as e:
+            self._on_failure()
+            raise` },
+
+{ type: 'code_snippet', text: `module.exports = {
+    async up(db) {
+        await db.schema.createTable('user_sessions', table => {
+            table.uuid('id').primary().defaultTo(db.fn.uuid());
+            table.bigInteger('user_id').notNullable()
+                 .references('id').inTable('users').onDelete('CASCADE');
+            table.string('token', 64).notNullable().unique();
+            table.string('ip_address', 45);
+            table.string('user_agent');
+            table.timestamp('expires_at').notNullable();
+            table.timestamps(true, true);
+        });
+        await db.schema.table('user_sessions', table => {
+            table.index(['user_id', 'expires_at']);
+        });
+    },
+
+    async down(db) {
+        await db.schema.dropTableIfExists('user_sessions');
+    }
+};` },
+
+{ type: 'code_snippet', text: `SELECT
+    date_trunc('week', created_at) AS week,
+    COUNT(*) AS signups,
+    COUNT(*) FILTER (WHERE converted_at IS NOT NULL) AS converted,
+    ROUND(
+        100.0 * COUNT(*) FILTER (WHERE converted_at IS NOT NULL) / COUNT(*), 2
+    ) AS conversion_rate
+FROM trial_users
+WHERE created_at >= '2024-01-01'
+GROUP BY 1
+ORDER BY 1;` },
+
+{ type: 'code_snippet', text: `const rateLimiter = (maxRequests, windowMs) => {
+    const requests = new Map();
+
+    return (req, res, next) => {
+        const key = req.ip;
+        const now = Date.now();
+        const windowStart = now - windowMs;
+
+        const userRequests = (requests.get(key) || [])
+            .filter(timestamp => timestamp > windowStart);
+
+        if (userRequests.length >= maxRequests) {
+            return res.status(429).json({
+                error: 'Too many requests',
+                retryAfter: Math.ceil((userRequests[0] - windowStart) / 1000)
+            });
+        }
+
+        userRequests.push(now);
+        requests.set(key, userRequests);
+        next();
+    };
+};` },
+
+{ type: 'code_snippet', text: `@Component
+public class JwtAuthFilter extends OncePerRequestFilter {
+
+    @Autowired
+    private JwtService jwtService;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req,
+            HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+
+        String header = req.getHeader("Authorization");
+        if (header == null || !header.startsWith("Bearer ")) {
+            chain.doFilter(req, res);
+            return;
+        }
+
+        String token = header.substring(7);
+        if (jwtService.isValid(token)) {
+            SecurityContextHolder.getContext()
+                .setAuthentication(jwtService.getAuth(token));
+        }
+        chain.doFilter(req, res);
+    }
+}` },
+
+{ type: 'code_snippet', text: `impl<T: Send + 'static> Worker<T> {
+    pub fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job<T>>>>) -> Worker<T> {
+        let thread = thread::spawn(move || loop {
+            let job = receiver.lock().unwrap().recv();
+            match job {
+                Ok(job) => {
+                    println!("Worker {id} executing job");
+                    job();
+                }
+                Err(_) => {
+                    println!("Worker {id} shutting down");
+                    break;
+                }
+            }
+        });
+        Worker { id, thread: Some(thread) }
+    }
+}` },
+
+{ type: 'code_snippet', text: `async function* streamResponse(prompt, options = {}) {
+    const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, stream: true, ...options })
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(Boolean);
+        for (const line of lines) {
+            if (line.startsWith('data: ')) {
+                const data = JSON.parse(line.slice(6));
+                if (data.content) yield data.content;
+            }
+        }
+    }
+}` },
+
+// ── data_report (20) ─────────────────────────────────────────────────────────
+{ type: 'data_report', text: `Monthly Active Users Report — March 2024
+
+Metric                    Feb 2024     Mar 2024     MoM Change
+Total MAU                 42,180       47,320       +12.2%
+New Users                 8,940        10,120       +13.2%
+Returning Users           33,240       37,200       +11.9%
+Mobile MAU                18,650       21,440       +14.9%
+Web MAU                   23,530       25,880       +10.0%
+Avg Sessions/User         5.2          5.8          +11.5%
+Avg Session Duration      8m 42s       9m 15s       +6.3%` },
+
+{ type: 'data_report', text: `Server Performance Summary — Week of Apr 8-14, 2024
+
+Service        p50 (ms)   p95 (ms)   p99 (ms)   Error Rate   Uptime
+API Gateway    18         87         234        0.12%         99.97%
+Auth Service   9          44         112        0.03%         100%
+Search         45         189        478        0.28%         99.94%
+Payments       67         298        891        0.08%         99.99%
+Notifications  12         56         143        0.41%         99.91%
+Storage        23         98         267        0.05%         100%` },
+
+{ type: 'data_report', text: `Q1 2024 Financial Summary
+
+Revenue Breakdown
+    Subscription Revenue      $2,847,300    76.4%
+    Professional Services     $612,400      16.4%
+    Usage-based               $267,800       7.2%
+    Total Revenue             $3,727,500   100.0%
+
+vs Q1 2023
+    Total Revenue:   +34.2%  ($2,776,200)
+    Gross Margin:    71.3%   (was 68.9%)
+    Operating Expenses: $1,820,400 (+22.1%)
+    EBITDA:          $808,350 (+61.7%)
+
+Key Metrics
+    ARR:                 $12.4M (up from $9.2M)
+    Net Revenue Retention:  118%
+    Customer Count:      847 (up from 623)` },
+
+{ type: 'data_report', text: `A/B Test Results  Checkout Flow Redesign
+
+Test period: March 1-31, 2024
+Sample size: 24,890 users (50/50 split)
+
+                        Control    Variant    Delta      Significance
+Checkout Start Rate     62.4%      64.8%      +2.4pp     p < 0.01
+Step 2 Completion       78.1%      83.6%      +5.5pp     p < 0.001
+Payment Success         71.3%      76.9%      +5.6pp     p < 0.001
+Avg Order Value         $84.20     $87.40     +3.8%      p < 0.05
+Time to Complete (s)    127        98         -22.8%     p < 0.001
+
+RESULT: Ship variant. Expected +$420K ARR impact.` },
+
+{ type: 'data_report', text: `Support Ticket Analysis  Q1 2024
+
+Category                  Volume   % of Total   Avg Resolution (h)   CSAT
+Billing Issues            1,204    24.1%         4.2                  78%
+Feature Questions         987      19.8%         1.8                  91%
+Bug Reports               743      14.9%         18.4                 72%
+Account Access            612      12.3%         2.1                  88%
+Integration Help          589      11.8%         6.7                  83%
+Performance Issues        401       8.0%         9.2                  69%
+Other                     452       9.1%         3.4                  85%
+Total                     4,988   100.0%         6.1                  82%
+
+SLA Compliance: 89.3% (target: 95%)
+Tickets Escalated: 147 (2.9%)` },
+
+{ type: 'data_report', text: `CDN and Bandwidth Report  March 2024
+
+Region          Requests (M)   Bandwidth (TB)   Cache Hit Rate   Avg Latency (ms)
+North America   1,847          48.3             94.2%            28
+Europe          1,203          31.7             93.8%            31
+Asia Pacific    964            25.1             91.4%            47
+South America   287            7.4              89.1%            68
+Other           142            3.8              87.3%            94
+Total           4,443          116.3            93.1%            36
+
+Top 5 Assets by Traffic
+    /static/js/main.abc123.js    38.4 TB
+    /static/css/app.def456.css   12.1 TB
+    /images/hero-banner.webp      9.8 TB
+    /api/v2/feed                  8.7 TB
+    /static/fonts/Inter.woff2     6.2 TB` },
+
+{ type: 'data_report', text: `NPS Survey Results  Q1 2024  (n = 1,847 responses)
+
+Score Distribution
+    Promoters  (9-10)    743   40.2%
+    Passives   (7-8)     682   36.9%
+    Detractors (0-6)     422   22.9%
+
+NPS Score: 17.3  (previous quarter: 11.8,  +5.5 points)
+
+Segment Breakdown
+Segment           n       NPS     vs Last Quarter
+Enterprise        312     34      +8
+Mid-market        589     19      +6
+SMB               946     10      +4
+
+Top Feedback Themes
+    Positive: reliability improvements, new search feature
+    Negative: pricing transparency, slow customer support` },
+
+{ type: 'data_report', text: `Feature Adoption Metrics  New Features (90-day cohort)
+
+Feature                     Users Eligible   Adopted   Rate    Avg Uses/Week
+Advanced Search Filters     47,320           31,840    67.3%   8.4
+Export to Excel             47,320           18,420    38.9%   2.1
+Team Collaboration          28,100           14,870    52.9%   12.7
+Custom Dashboards           28,100           9,340     33.2%   6.3
+API Webhooks                8,400            4,120     49.0%   3.8
+SSO (Enterprise only)       2,180            1,960     89.9%   N/A
+
+Stickiness Score (DAU/MAU)
+    Core Features:      68.4%
+    New Features:       31.2%
+    Target:             45%` },
+
+{ type: 'data_report', text: `Deployment Frequency Report  Q1 2024
+
+Month       Deployments   Rollbacks   MTTR (min)   Change Failure Rate
+January     84            3           18.4         3.6%
+February    91            2           14.2         2.2%
+March       108           4           12.8         3.7%
+Q1 Total    283           9           15.1         3.2%
+
+vs Q4 2023
+    Deployments:         +31% (216 in Q4)
+    Rollbacks:           +12.5% (8 in Q4)
+    MTTR:                -34% (23.0 min in Q4)
+    Change Failure Rate: -0.8pp (4.0% in Q4)
+
+DORA Metrics Classification: Elite (top 25%)` },
+
+{ type: 'data_report', text: `Sales Pipeline Report  April 2024
+
+Stage               Deals   Total Value   Avg Deal Size   Win Rate (hist.)
+Qualified Lead      87      $4.2M         $48,300         —
+Discovery           43      $3.1M         $72,100         —
+Demo Completed      31      $2.8M         $90,300         —
+Proposal Sent       24      $2.4M         $100,000        —
+Negotiation         18      $1.9M         $105,600        —
+Closed Won (MTD)    12      $1.1M         $91,700         —
+Closed Lost (MTD)   8       $0.6M         $75,000         —
+
+Forecast
+    Conservative:  $3.2M  (Q2 weighted pipeline × 0.8)
+    Base Case:     $4.0M
+    Optimistic:    $4.8M` },
+
+{ type: 'data_report', text: `Load Test Results  Payment Service  April 12 2024
+
+Test scenario: Black Friday simulation (10× normal traffic)
+Duration: 60 minutes  Target RPS: 2,000
+
+RPS             p50    p95    p99    Error Rate   CPU %   Memory %
+500 (baseline)  67ms   298ms  891ms  0.08%        23%     41%
+1,000           74ms   342ms  1,012ms 0.11%       47%     58%
+1,500           89ms   489ms  1,847ms 0.19%       71%     74%
+2,000           134ms  892ms  4,210ms 0.84%       94%     89%
+2,500 (burst)   DEGRADED — 12.4% error rate, service unstable
+
+RECOMMENDATION: Scale to 6 instances before Black Friday (currently 4)
+Current max sustainable: ~1,800 RPS` },
+
+{ type: 'data_report', text: `Email Campaign Performance  April 2024
+
+Campaign               Sent      Open Rate   CTR     Unsubscribe   Revenue
+Monthly Newsletter     48,320    24.8%       3.2%    0.18%         $12,400
+Feature Announcement   31,840    41.2%       8.7%    0.09%         $28,700
+Re-engagement Series   12,400    18.3%       2.1%    0.94%         $4,200
+Trial Expiry (3-day)   3,920     67.4%       22.8%   0.04%         $31,800
+Upgrade Prompt         18,600    31.6%       5.4%    0.12%         $19,400
+
+Best performers: Trial expiry sequence (highest CTR and revenue)
+Worst performer: Re-engagement (high unsubscribe, review cadence)` },
+
+{ type: 'data_report', text: `Infrastructure Cost Breakdown  Q1 2024
+
+Service                 Jan        Feb        Mar        Q1 Total   vs Q4
+Compute (EC2/GKE)       $48,200    $51,400    $54,700    $154,300   +18.2%
+Database (RDS/Spanner)  $21,300    $22,100    $23,800    $67,200    +12.4%
+Storage (S3/GCS)        $8,400     $8,900     $9,200     $26,500    +8.6%
+CDN (CloudFront)        $6,100     $6,400     $7,100     $19,600    +14.0%
+Networking              $4,200     $4,500     $4,800     $13,500    +9.8%
+Monitoring/Logging      $3,100     $3,200     $3,400     $9,700     +5.4%
+Other                   $2,800     $2,900     $3,100     $8,800     +6.1%
+Total                   $94,100    $99,400    $106,100   $299,600   +14.8%
+
+Cost per MAU: $2.23 (Q4: $2.41, -7.5% efficiency improvement)` },
+
+{ type: 'data_report', text: `User Retention Cohort  Jan 2024 New Users  (n = 10,120)
+
+Week    Retained    Rate     vs Nov Cohort
+0       10,120      100%     —
+1       7,284       72.0%    +3.2pp
+2       5,868       58.0%    +2.8pp
+4       4,244       41.9%    +2.1pp
+8       3,085       30.5%    +1.9pp
+12      2,428       24.0%    +1.6pp
+16      1,960       19.4%    +1.1pp
+24      1,620       16.0%    +1.3pp (projected)
+
+Activation Rate (completed setup): 81.4% (target 80%)
+Habit formation (3+ sessions in week 2): 44.2%` },
+
+{ type: 'data_report', text: `Security Audit Summary  Q1 2024
+
+Vulnerability Type      Critical   High   Medium   Low   Total   Resolved
+SQL Injection           1          0      0        0     1       1
+XSS                     0          2      4        1     7       7
+Authentication          0          1      2        3     6       5
+Authorization           0          0      3        2     5       5
+Dependency CVEs         0          7      14       23    44      41
+Config Issues           0          0      2        8     10      10
+Total                   1          10     25       37    73      69
+
+Resolution Rate: 94.5%
+Critical resolved within SLA (24h): Yes (1/1)
+Mean time to resolve (High): 3.4 days (SLA: 7 days)` },
+
+{ type: 'data_report', text: `Team Velocity Tracking  Last 6 Sprints
+
+Sprint    Story Points   Bug Fixes   Planned   Velocity   Completion
+Sprint 19   42              6          48        42         87.5%
+Sprint 20   38              8          44        38         86.4%
+Sprint 21   51              4          52        51         98.1%
+Sprint 22   46              9          48        46         95.8%
+Sprint 23   35              12         45        35         77.8%
+Sprint 24   38              8          43        38         88.4%
+Average     41.7            7.8        46.7      41.7       89.0%
+
+6-sprint trend: stable velocity, bug count slightly elevated
+Unplanned work avg: 18.9% of capacity` },
+
+{ type: 'data_report', text: `Conversion Funnel Analysis  March 2024
+
+Stage               Users       Conversion   Drop-off    vs Feb
+Homepage Visit      284,200     —            —           +8.4%
+Signup Page View    47,320      16.6%        83.4%       +0.9pp
+Registration Start  31,840      67.3%        32.7%       +1.2pp
+Registration Done   28,100      88.3%        11.7%       +0.8pp
+Onboarding Step 1   24,620      87.6%        12.4%       +0.3pp
+Onboarding Done     19,480      79.1%        20.9%       -1.2pp
+First Core Action   14,870      76.3%        23.7%       +2.1pp
+Day 7 Active        10,820      72.8%        27.2%       +1.4pp` },
+
+{ type: 'data_report', text: `Inventory Report  March 31, 2024
+
+SKU          Name                Units In Stock   Units Sold (Mar)   Reorder Point
+SKU-1041     Pro Plan License    ∞ (digital)      1,204              N/A
+SKU-1042     Enterprise License  ∞ (digital)      87                 N/A
+SKU-2001     USB Dongle          842              143                250
+SKU-2002     Hardware Key        1,247            89                 200
+SKU-3001     Premium Support     ∞ (service)      312                N/A
+SKU-3002     Onboarding Package  ∞ (service)      64                 N/A
+
+Physical Items Below Reorder Point: 1 (SKU-2001)
+Action Required: Place USB Dongle reorder immediately` },
+
+{ type: 'data_report', text: `API Usage Report  March 2024
+
+Endpoint               Calls (M)   Avg Latency   p99 Latency   Error Rate
+GET /api/v2/users      18.4        24ms          187ms         0.04%
+POST /api/v2/export    4.2         1,240ms       8,420ms       0.31%
+GET /api/v2/search     12.8        89ms          743ms         0.18%
+POST /api/v2/webhooks  3.1         67ms          341ms         0.08%
+GET /api/v2/reports    2.4         342ms         2,140ms       0.12%
+All Other Endpoints    8.7         45ms          289ms         0.06%
+Total                  49.6        84ms          1,024ms       0.11%
+
+SDK Version Distribution
+    v3.x   74.2%
+    v2.x   21.4%
+    v1.x   4.4% (deprecated, notify users)` },
+
+{ type: 'data_report', text: `Customer Segmentation  Q1 2024
+
+Segment          Customers   ARR          Avg ACV     NRR    Churn
+Enterprise       87          $5.84M       $67,100     128%   1.1%
+Mid-market       234         $3.96M       $16,900     115%   3.2%
+SMB Growth       526         $2.02M       $3,840      108%   8.4%
+SMB Basic        1,244       $1.08M       $868        97%    18.7%
+Total / Blended  2,091       $12.90M      $6,170      114%   7.8%
+
+Top expansion drivers: seat expansion (41%), tier upgrades (33%), add-ons (26%)
+Top churn reasons: price (38%), feature gaps (29%), consolidation (22%)` },
+
+// ── general_prose (20) ──────────────────────────────────────────────────────
+{ type: 'general_prose', text: `Welcome to StreamlineDB
+
+StreamlineDB is a cloud-native database built for teams that need predictable performance at any scale. Unlike traditional databases that require constant tuning, StreamlineDB adapts to your workload automatically.
+
+Whether you are running a startup or managing enterprise data, StreamlineDB handles millions of queries per day without the operational overhead.
+
+Key benefits include automatic scaling, built-in replication, zero-downtime migrations, and a familiar SQL interface. StreamlineDB integrates with all major cloud providers and supports your existing tools and workflows.
+
+Get started at streamlinedb.com or contact our sales team for a personalized demo.` },
+
+{ type: 'general_prose', text: `How HTTP Caching Works
+
+When a browser requests a resource, the server can include cache headers that tell the browser how long to store the response locally. On subsequent requests for the same resource, the browser can serve it directly from its cache without contacting the server at all.
+
+The two most important cache headers are Cache-Control and ETag. Cache-Control specifies the maximum age of the cached response. ETag provides a version identifier so the browser can ask the server whether its cached copy is still current.
+
+Effective caching dramatically reduces latency and server load. Static assets like fonts, images, and JavaScript bundles can be cached for a year or more, while API responses typically need much shorter cache lifetimes.` },
+
+{ type: 'general_prose', text: `About Our Engineering Team
+
+We are a team of 45 engineers distributed across San Francisco, Amsterdam, and Singapore. We ship weekly, deploy to production dozens of times per day, and maintain a strong culture of code review, documentation, and operational excellence.
+
+We believe in pragmatic engineering. We choose boring, proven technology over novel solutions unless there is a compelling reason. We invest heavily in developer tooling, test infrastructure, and observability because we believe the cost of quality pays for itself many times over.
+
+If you want to work on hard problems with great teammates, check out our open positions at careers.example.com.` },
+
+{ type: 'general_prose', text: `Understanding Database Transactions
+
+A transaction is a unit of work that is treated as a single operation. Either everything inside the transaction succeeds and the changes are committed to the database, or something fails and all changes are rolled back as if nothing happened.
+
+This property, known as atomicity, is one of the four ACID guarantees that reliable databases provide. The others are consistency, isolation, and durability.
+
+Transactions are essential whenever you need to update multiple related records together. For example, transferring money between two bank accounts requires debiting one and crediting the other, and both operations must either succeed together or fail together.` },
+
+{ type: 'general_prose', text: `Version 4.0 Release Announcement
+
+We are excited to announce the release of version 4.0, our most significant update in three years. This release includes a completely redesigned dashboard, significant performance improvements across the entire product, and a new collaboration layer that makes it easier for teams to work together.
+
+The performance work alone reduced average page load times by more than forty percent. We also reduced memory usage substantially, which will particularly benefit users on lower-powered devices.
+
+The new collaboration features include shared workspaces, real-time co-editing, and an activity feed that keeps everyone on the same page. These features are available immediately to all users on the Team and Enterprise plans.` },
+
+{ type: 'general_prose', text: `Introduction to Event-Driven Architecture
+
+Event-driven architecture is a software design pattern in which components communicate by producing and consuming events. Rather than calling each other directly, services emit events when something meaningful happens, and other services react to those events independently.
+
+This approach has several advantages. Services become loosely coupled, meaning changes to one service are less likely to break others. The system becomes more resilient because events can be queued and processed even if some services are temporarily unavailable. And new features can often be added by introducing a new event consumer without touching existing code.
+
+The tradeoffs include increased complexity in debugging and monitoring, and the challenge of ensuring events are processed in the right order.` },
+
+{ type: 'general_prose', text: `Privacy Policy Summary
+
+We take your privacy seriously. This summary explains what data we collect, why we collect it, and how you can control it.
+
+We collect information you provide directly, such as your name and email address when you create an account. We also collect usage data to understand how people use our product and to improve it over time.
+
+We do not sell your personal data to third parties. We share data with service providers who help us operate our business, but only under strict data processing agreements.
+
+You have the right to access, correct, or delete your personal data at any time. To exercise these rights, contact our privacy team at privacy@example.com or visit your account settings.` },
+
+{ type: 'general_prose', text: `Why We Chose PostgreSQL
+
+When we designed our data layer, we evaluated several database options including MySQL, MongoDB, and CockroachDB. We ultimately chose PostgreSQL and have not regretted that decision.
+
+PostgreSQL's maturity matters enormously in production. It has been under continuous development for over 25 years, and its stability and correctness are exceptional. When we encounter an unexpected behavior, the documentation and community are always there to help.
+
+We also appreciate its flexibility. JSON support lets us handle semi-structured data when needed, without sacrificing the relational model for our core data. Full-text search, window functions, and lateral joins cover use cases that would require separate systems in other databases.
+
+The operational story is also excellent. Streaming replication, point-in-time recovery, and mature monitoring tooling give us confidence that we can recover from any failure.` },
+
+{ type: 'general_prose', text: `Our Approach to Incident Response
+
+When something goes wrong in production, the most important thing is restoring service quickly. Root cause analysis can wait. We use a simple priority order: detect, communicate, mitigate, resolve, and then learn.
+
+During an incident, one person takes the role of incident commander. Their job is to coordinate the response, not to solve the technical problem personally. They delegate investigation to engineers, keep stakeholders informed, and make decisions when there is disagreement about next steps.
+
+After every significant incident, we hold a blameless retrospective. The goal is to understand what happened and how to prevent it, not to assign fault. We document the timeline, the contributing factors, and the actions we will take to reduce the likelihood of recurrence.` },
+
+{ type: 'general_prose', text: `Getting Started Guide
+
+Welcome to our platform. This guide will walk you through the key steps to get up and running in your first session.
+
+Start by completing your profile. A complete profile helps your teammates know who you are and makes collaboration smoother. You will want to add a photo, a short bio, and set your notification preferences.
+
+Next, connect your tools. We integrate with GitHub, Jira, Slack, and dozens of other services. Head to the Integrations page in your settings to connect the tools your team already uses.
+
+Finally, invite your team. The platform works best when everyone is on it. Use the invite button in the top navigation to send email invitations, or share your team's invite link.
+
+If you get stuck at any point, our help center at help.example.com has answers to the most common questions, and our support team is always available by chat.` },
+
+{ type: 'general_prose', text: `The Case for Boring Technology
+
+There is a temptation in software engineering to reach for the newest, most exciting tools and frameworks. The tech industry celebrates innovation, and there is real professional reward in being on the cutting edge.
+
+But for most product engineering work, boring technology is better technology. Boring technology has been used in production for years. Its failure modes are understood. The community is large. Documentation is comprehensive. Hiring is easier because more engineers know it.
+
+Every new technology you adopt creates ongoing costs. You need to stay current with its evolution, train your team, deal with its rough edges, and eventually decide whether to migrate away from it when something better comes along.
+
+None of this means you should never try something new. It means you should have a strong reason for deviating from the boring path, and you should be honest about the costs.` },
+
+{ type: 'general_prose', text: `Understanding WebSockets
+
+HTTP is a request-response protocol. The client asks for something, the server responds, and the connection closes. This works well for most web interactions, but it creates problems when the server needs to push updates to the client in real time.
+
+WebSockets solve this by establishing a persistent bidirectional connection. Once the initial HTTP handshake upgrades to a WebSocket connection, both sides can send messages at any time without waiting for the other to initiate.
+
+WebSockets are well suited for live notifications, collaborative editing, chat applications, and real-time dashboards. They are not a good fit for situations where simple polling or server-sent events would suffice, because persistent connections consume server resources even when no messages are being exchanged.` },
+
+{ type: 'general_prose', text: `Designing for Failure
+
+Every distributed system will experience failures. Servers crash, networks partition, third-party services become unavailable. The question is not whether these things will happen but whether your system degrades gracefully when they do.
+
+Defensive design starts with identifying the failure modes that matter most. Not every component is equally critical. A search service being slow is unfortunate. A payment service being unavailable is a business emergency.
+
+Useful patterns include circuit breakers, which stop sending traffic to a failing dependency to give it time to recover. Bulkheads isolate failures by separating resource pools, so one slow component cannot exhaust resources needed by healthy parts of the system. Timeouts ensure that slow responses do not cause cascading delays.
+
+The most important principle is to test your failure handling before failures happen in production.` },
+
+{ type: 'general_prose', text: `Engineering Blog: Scaling Our Search Infrastructure
+
+Over the past year, search query volume on our platform grew by four hundred percent. What started as a straightforward Elasticsearch cluster eventually required a fundamental rethinking of how we handle search at scale.
+
+The first problem we encountered was indexing latency. As our document count grew past fifty million, reindexing after bulk updates began taking several hours. This was unacceptable for a product that promised near-real-time search.
+
+We solved this by moving to a tiered indexing strategy. Newly created and recently updated documents go into a small, fast hot index that can be rebuilt in minutes. A background process continuously merges documents into a larger, slower cold index. Most queries hit both indexes and merge the results.
+
+The second problem was query performance under load. We found that our relevance scoring calculations were much more expensive at the long tail of complex queries.` },
+
+{ type: 'general_prose', text: `On Code Reviews
+
+Code review is one of the highest-leverage activities in software engineering. A good review finds bugs before they reach production, spreads knowledge across the team, and maintains consistency in the codebase. A bad review is a bottleneck that slows down delivery and frustrates engineers.
+
+The most common failure mode for code reviews is treating them as gatekeeping. Reviews that focus primarily on style preferences, that ask for extensive changes without explaining why, or that take more than a day to start create friction without adding much value.
+
+Good reviews focus on things that actually matter: correctness, security, performance characteristics, and maintainability. They are specific about what is required versus what is a suggestion. And they are prompt, because a pull request that sits unreviewed is work that is not getting done.` },
+
+{ type: 'general_prose', text: `Service Level Objectives Explained
+
+A service level objective is a target for how reliable or performant a system should be. Unlike a service level agreement, which is a contract with external consequences, an SLO is an internal commitment that guides engineering decisions.
+
+Common SLOs measure availability, latency, and error rate. An availability SLO might state that the service should be responding correctly to at least 99.9 percent of requests over any rolling 30-day window. A latency SLO might require that 95 percent of requests complete in under 200 milliseconds.
+
+SLOs are valuable because they make tradeoffs explicit. When you have a defined reliability target, you can decide whether to prioritize feature work or reliability work based on how much of your error budget remains. When you are burning through your budget too quickly, it is a clear signal to pause feature development and address reliability.` },
+
+{ type: 'general_prose', text: `On Monorepos
+
+A monorepo is a single version control repository that contains the code for multiple projects or services. Many large technology companies, including Google, Facebook, and Twitter, use monorepo strategies for substantial portions of their codebase.
+
+The appeal of a monorepo is easy to understand. Atomic commits across multiple projects are straightforward. Dependency management is simpler because all projects use consistent versions. Refactoring across services becomes easier because you can see all the call sites in a single search.
+
+The challenges are real as well. As the repository grows, build and test times increase unless you invest in tooling that can selectively run only what has changed. Code ownership becomes harder to enforce. And engineers must be disciplined about not creating inappropriate coupling between projects just because it is technically possible.` },
+
+{ type: 'general_prose', text: `Announcing Our New Mobile App
+
+We are proud to launch our native mobile applications for iOS and Android. After months of development and private beta testing with over two thousand users, we are ready to make the experience available to everyone.
+
+The apps were built from the ground up with mobile-first patterns in mind. Navigation is designed for thumbs. The most common actions are always reachable without scrolling. Offline support lets you view and create content even when your connection is unreliable.
+
+Push notifications replace the polling behavior of the old web app, giving you timely alerts without battery drain. You can customize exactly which events trigger notifications in the settings menu.
+
+Download on the App Store or Google Play, or visit our website on your phone for a direct link.` },
+
+{ type: 'general_prose', text: `Developer Experience Is Product
+
+The way developers interact with your API, SDK, or platform is as much a product decision as your user interface. A confusing API has the same kind of user experience problems as a confusing interface, and they deserve the same level of design attention.
+
+Good developer experience starts with clear mental models. Developers should be able to form an accurate understanding of how your system works from the documentation alone, before writing a single line of code. Surprising behavior or inconsistent naming forces developers to learn from trial and error rather than from documentation.
+
+Error messages are another high-leverage area. An error message that says what went wrong, why it might have happened, and what to do about it can save a developer an hour of debugging. An error message that says only something went wrong achieves almost nothing.` },
+
+{ type: 'general_prose', text: `The Importance of Internal Documentation
+
+Most engineering teams write documentation for their users. Fewer maintain good documentation for themselves.
+
+Internal documentation serves different purposes than external documentation. It captures decisions and their rationale, so that future engineers understand not just what the system does but why it was built that way. It explains the operational characteristics that every on-call engineer needs to know. It provides onboarding paths for new team members.
+
+The most common failure mode for internal documentation is that it becomes stale. Code changes and the docs do not. The solution is not more documentation but better habits around when documentation is expected to be written and reviewed.
+
+A useful heuristic is that any change that takes more than a few hours to make should include a documentation update. Any time you explain something verbally to a colleague, you should consider whether that explanation belongs in writing.` },
+
+]; // end DATASET
+
+// ─── Test Runner ─────────────────────────────────────────────────────────────
+
+const TYPES = ['technical_doc', 'meeting_notes', 'code_snippet', 'data_report', 'general_prose'];
+const LABELS = {
+  technical_doc: '技术文档',
+  meeting_notes: '会议记录',
+  code_snippet: '代码片段',
+  data_report: '数据报告',
+  general_prose: '通用文本',
+};
+const TAG_CLASS = {
+  technical_doc: 'tag-td',
+  meeting_notes: 'tag-mn',
+  code_snippet: 'tag-cs',
+  data_report: 'tag-dr',
+  general_prose: 'tag-gp',
+};
+
+function runTests() {
+  const extractor = new DocumentFeatureExtractor();
+  const results = DATASET.map(({ type, text }) => {
+    const features = extractor.extract(text);
+    const predicted = extractor.classify(features).type;
+    return { actual: type, predicted, text, features, pass: predicted === type };
+  });
+
+  const total = results.length;
+  const passed = results.filter(r => r.pass).length;
+  const failed = total - passed;
+  const accuracy = (passed / total * 100).toFixed(1);
+
+  document.getElementById('overall-acc').textContent = accuracy + '%';
+  document.getElementById('total-pass').textContent = passed;
+  document.getElementById('total-fail').textContent = failed;
+  document.getElementById('overall-acc').style.color = accuracy >= 85 ? '#48bb78' : accuracy >= 70 ? '#ed8936' : '#f56565';
+
+  // Per-class accuracy
+  const perClass = {};
+  TYPES.forEach(t => { perClass[t] = { correct: 0, total: 0 }; });
+  results.forEach(r => {
+    perClass[r.actual].total++;
+    if (r.pass) perClass[r.actual].correct++;
+  });
+
+  document.getElementById('per-class').innerHTML = TYPES.map(t => {
+    const { correct, total } = perClass[t];
+    const acc = total > 0 ? (correct / total * 100).toFixed(1) : 0;
+    const isLow = acc < 70;
+    return `<div class="class-row">
+      <div class="class-name"><span class="tag tag-ct ${TAG_CLASS[t]}">${LABELS[t]}</span></div>
+      <div class="bar-bg"><div class="bar-fill ${isLow ? 'low' : ''}" style="width:${acc}%"></div></div>
+      <div class="acc-val" style="color:${isLow ? '#f56565' : '#48bb78'}">${acc}%</div>
+      <div class="counts">${correct}/${total}</div>
+    </div>`;
+  }).join('');
+
+  // Confusion matrix
+  const matrix = {};
+  TYPES.forEach(a => { matrix[a] = {}; TYPES.forEach(p => matrix[a][p] = 0); });
+  results.forEach(r => matrix[r.actual][r.predicted]++);
+
+  const shortLabel = t => ({ technical_doc:'Tech', meeting_notes:'Meet', code_snippet:'Code', data_report:'Data', general_prose:'Prose' }[t]);
+  let tableHtml = `<table class="matrix"><thead><tr><th>Actual \\ Predicted</th>${TYPES.map(t => `<th>${shortLabel(t)}</th>`).join('')}</tr></thead><tbody>`;
+  TYPES.forEach(a => {
+    tableHtml += `<tr><td class="label">${shortLabel(a)} (${LABELS[a]})</td>`;
+    TYPES.forEach(p => {
+      const n = matrix[a][p];
+      const cls = n === 0 ? 'zero' : a === p ? 'diagonal' : 'error';
+      tableHtml += `<td class="${cls}">${n}</td>`;
+    });
+    tableHtml += '</tr>';
+  });
+  tableHtml += '</tbody></table>';
+  document.getElementById('matrix-wrap').innerHTML = tableHtml;
+
+  // Failures
+  const failures = results.filter(r => !r.pass);
+  document.getElementById('fail-count').textContent = failures.length;
+
+  if (failures.length === 0) {
+    document.getElementById('failures').innerHTML = '<div class="empty-note">All examples classified correctly.</div>';
+    return;
+  }
+
+  document.getElementById('failures').innerHTML = failures.map(r => {
+    const f = r.features;
+    const featureSummary = `codeDensity=${f.codeDensity.toFixed(3)}  indentDepth=${f.indentDepth}  upperRatio=${f.upperRatio.toFixed(3)}  numericDensity=${f.numericDensity.toFixed(3)}  hasTable=${f.hasTable}  hasDate=${f.hasDate}  avgLen=${f.avgLen.toFixed(0)}`;
+    const preview = r.text.trim().slice(0, 180).replace(/</g, '&lt;');
+    return `<div class="failure-item">
+      <div class="failure-header">
+        <span class="tag tag-ct ${TAG_CLASS[r.actual]}">Expected: ${LABELS[r.actual]}</span>
+        <span style="color:#718096">→</span>
+        <span class="tag tag-ct ${TAG_CLASS[r.predicted]}">Got: ${LABELS[r.predicted]}</span>
+      </div>
+      <div class="failure-text">${preview}${r.text.length > 180 ? '…' : ''}</div>
+      <div class="features">${featureSummary}</div>
+    </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
