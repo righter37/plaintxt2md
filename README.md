@@ -1,4 +1,4 @@
-#最新版为plaintxt2md-main/plaintext-to-markdown-chrome  下载后去chrome浏览器插件部分，打开“开发者模式”上传即可使用
+# 最新版为plaintxt2md-main/plaintext-to-markdown-chrome  下载后去chrome浏览器插件部分，打开“开发者模式”上传即可使用
 设计了5种常见场景的不同处理，可以手动选择，也可默认自动识别
 <img width="1920" height="822" alt="image" src="https://github.com/user-attachments/assets/17aa979e-ed0f-4c3f-9696-d1516e334e5f" />
 
