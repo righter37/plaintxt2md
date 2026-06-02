@@ -25,7 +25,7 @@
 
 - **🧠 场景自适应**：内置 5 种常见文档场景的差异化处理，可手动选择，也可默认自动识别。
 - **📊 表格还原**：表格类内容直接复制粘贴会丢失格式，本工具转换后可识别并重建为 Markdown 表格。
-- **⚡ 双模式转换**：AI 智能转换（接入大模型）+ 本地规则引擎转换（无需网络）。
+- **⚡ 转换方式**：Chrome 插件为 AI 智能转换（场景识别在浏览器本地完成，转换调用大模型，需联网 + API Key）；网页版额外提供无需联网的本地规则引擎转换。
 - **🧩 两种形态**：Chrome 浏览器插件（推荐，最新版）+ 纯前端网页版。
 
 ---
@@ -160,7 +160,7 @@ An LLM-powered formatting tool: paste any plain text, and it automatically detec
 
 - **🧠 Scene-adaptive** — 5 built-in document scenes with tailored handling; auto-detected by default, or pick one manually.
 - **📊 Table restoration** — Tables lose their formatting when copied as plain text; this tool detects and rebuilds them as Markdown tables.
-- **⚡ Dual mode** — AI conversion (via LLM) + a local rule engine that works offline.
+- **⚡ Conversion** — The Chrome extension uses AI conversion (scene detection runs locally in the browser; conversion calls the LLM, so it needs network + an API Key). The web app additionally offers offline local rule-engine conversion.
 - **🧩 Two form factors** — Chrome extension (recommended, latest) + a pure-frontend web app.
 
 ## 🚀 Quick Start (Latest · Chrome Extension)
