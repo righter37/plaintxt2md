@@ -60,52 +60,6 @@ body {
     opacity: 0.9;
 }
 
-/* Mode Bar */
-.mode-bar {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-}
-
-.mode-btn {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--bg);
-    border: 2px solid transparent;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.mode-btn:hover {
-    border-color: var(--primary);
-}
-
-.mode-btn.active {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: white;
-}
-
-.mode-icon {
-    font-size: 24px;
-}
-
-.mode-name {
-    font-weight: 600;
-    font-size: 14px;
-}
-
-.mode-desc {
-    font-size: 12px;
-    opacity: 0.8;
-    margin-top: 2px;
-}
-
 /* Settings Panel */
 .settings-panel {
     background: var(--surface);
@@ -244,8 +198,7 @@ body {
 }
 
 .btn-convert {
-    width: 100%;
-    max-width: 300px;
+    flex: 1;
     padding: 14px 24px;
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     color: white;
@@ -278,6 +231,79 @@ body {
 
 .btn-convert .btn-icon {
     font-size: 20px;
+}
+
+/* Style template */
+.style-template-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.label-optional {
+    font-weight: 400;
+    color: var(--text-secondary);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11px;
+}
+
+.char-counter {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.char-counter.over-limit {
+    color: var(--error);
+    font-weight: 600;
+}
+
+.style-template-area {
+    min-height: 90px;
+    max-height: 160px;
+    font-size: 12px;
+    resize: vertical;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.style-template-area:focus {
+    border-color: var(--primary);
+}
+
+/* Doc type selector */
+.convert-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.doc-type-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.selector-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.doc-type-select {
+    width: 120px;
+    padding: 6px 8px;
+    font-size: 12px;
 }
 
 /* Loading */

@@ -1,224 +1,327 @@
-// AI Plain Text to Markdown Converter - Chrome Extension
-// Main logic for popup
+// Popup — AI-only, document-type-adaptive Markdown converter
 
 const DEFAULT_CONFIG = {
     apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     apiKey: '',
     model: 'qwen-plus',
-    mode: 'ai' // 'ai' or 'local'
+    headingLevel: 1,
+    styleTemplate: ''
 };
 
-const AI_PROMPT_TEMPLATE = `你是一位专业的文档格式分析专家。请将用户提供的纯文本转换为格式规范的 Markdown 文档。
+function buildHeadingInstruction(level) {
+    const h = n => '#'.repeat(n);
+    return `标题层级规则：最高级标题使用 ${h(level)}（H${level}），二级标题使用 ${h(level + 1)}，三级标题使用 ${h(level + 2)}，文档中不得出现比 ${h(level)} 级别更高的标题。`;
+}
 
-## 分析任务
+class DocumentFeatureExtractor {
+    extract(text) {
+        const lines = text.split('\n');
+        const nonEmpty = lines.filter(l => l.trim().length > 0);
+        if (nonEmpty.length === 0) return this._empty();
 
-1. **文档结构分析**
-   - 识别主标题、章节标题、子标题
-   - 判断层级关系（H1-H6）
-   - 识别引言、正文、总结等不同段落类型
+        const codeKwRx = /\b(function|class|def|const|let|var|return|import|from|select|if|for|while|public|private|void|int|float|double|bool|#include|namespace|struct|interface|extends|implements|fn|func|async|await|enum|impl|trait)\b/i;
+        const codeDensity = nonEmpty.filter(l => codeKwRx.test(l)).length / nonEmpty.length;
 
-2. **代码块识别**
-   - 检测代码片段（函数、类、配置等）
-   - 识别编程语言（Python、JavaScript、Java、C++、SQL、Bash 等）
-   - 使用 fenced code block (\`\`\`) 包裹
+        const indentDepth = Math.max(0, ...nonEmpty.map(l => {
+            const m = l.match(/^(\t+| +)/);
+            if (!m) return 0;
+            return m[0].includes('\t') ? m[0].length : Math.floor(m[0].length / 2);
+        }));
 
-3. **列表识别**
-   - 无序列表（项目符号）
-   - 有序列表（编号）
-   - 嵌套列表
+        const upperRatio = nonEmpty.filter(l => {
+            const t = l.trim();
+            return t.length > 3 && t.length < 60 && t === t.toUpperCase() && /[A-Z]/.test(t);
+        }).length / nonEmpty.length;
 
-4. **表格识别**
-   - 识别表格结构
-   - 使用 Markdown 表格语法
+        const hasTable = lines.filter(l => l.trim().split(/\s{2,}/).filter(Boolean).length >= 3).length >= 2;
+        const avgLen = nonEmpty.reduce((s, l) => s + l.length, 0) / nonEmpty.length;
 
-5. **其他元素**
-   - 链接（URL、邮箱）
-   - 强调（粗体、斜体）
-   - 引用块
-   - 分隔线
+        const dateRx = /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|Q[1-4]\s*\d{4}|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2})/i;
+        const hasDate = lines.some(l => dateRx.test(l));
+        const hasEmailHeaders = lines.some(l => /^(From|To|Subject|Cc|Bcc|Date)\s*:/i.test(l.trim()));
+        const numericDensity = (text.match(/\d/g) || []).length / Math.max(text.length, 1);
 
-## 输出要求
+        const proseSentenceRx = /^[A-Z][a-zA-Z].{38,}/;
+        const proseDensity = nonEmpty.filter(l => proseSentenceRx.test(l.trim())).length / nonEmpty.length;
 
-1. 只输出转换后的 Markdown 内容，不要添加解释
-2. 保持原文的语义和顺序
-3. 使用适当的空行分隔不同段落
-4. 代码块必须标注语言类型
+        const indentedCodeLines = nonEmpty.filter(l => /^(\s{2,}|\t)/.test(l) && codeKwRx.test(l));
+        const hasCodeBlock = indentedCodeLines.length >= 2;
 
-## 待转换文本
+        const sqlStartRx = /^\s*(SELECT\b|FROM\s+\w|INSERT\s+INTO\b|UPDATE\s+\w|DELETE\s+FROM\b|CREATE\s+(TABLE|INDEX|VIEW)\b|WITH\s+\w+\s+AS\b|GROUP\s+BY\b|ORDER\s+BY\b|HAVING\b)/i;
+        const hasSqlBlock = nonEmpty.filter(l => sqlStartRx.test(l)).length >= 2;
 
-{text}`;
+        const techDocPatterns = [
+            /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+\//i,
+            /^--[\w-]+/,
+            /^\w[\w.]*:\s+(int|str|string|bool|float|number|void|array|list|object|any)\b/i,
+            /^\w[\w.-]*\s{3,}(int|str|string|bool|float|number|array|list)\b/i,
+            /^[A-Z][A-Z_0-9]{3,}\b/,
+            /^[2-5]\d{2}\s+[A-Z][a-z]/,
+        ];
+        const hasTechPatterns = nonEmpty.filter(l => techDocPatterns.some(p => p.test(l.trim()))).length >= 2;
 
-// Local converter class
-class TextToMarkdownConverter {
-    constructor(options = {}) {
-        this.options = {
-            headers: true,
-            lists: true,
-            emphasis: true,
-            links: true,
-            tables: true,
-            code: true,
-            ...options
-        };
+        const meetKwRx = /\b(attendees?|action\s+items?|agenda|sprint\s+(review|planning|goal|retro)|retrospective|stand[\s-]?up|blockers?|next\s+steps?)\b/i;
+        const hasMeetingKeywords = meetKwRx.test(text);
+
+        const firstLine = (nonEmpty[0] || '').trim();
+        const firstLineIsTitle =
+            firstLine.length >= 3 && firstLine.length <= 50 &&
+            /\s/.test(firstLine) &&
+            !/[(){}[\];=<>@#]/.test(firstLine) &&
+            !/:$/.test(firstLine) &&
+            /[a-z]/.test(firstLine);
+
+        return { codeDensity, indentDepth, upperRatio, hasTable, avgLen, hasDate, hasEmailHeaders, numericDensity, proseDensity, hasCodeBlock, hasSqlBlock, hasTechPatterns, hasMeetingKeywords, firstLineIsTitle };
     }
 
-    convert(text) {
-        if (!text.trim()) return '';
-        
-        let lines = text.split('\n');
-        let result = [];
-        let i = 0;
-        
-        while (i < lines.length) {
-            let line = lines[i];
-            
-            if (!line.trim()) {
-                result.push('');
-                i++;
-                continue;
-            }
-
-            // Code block detection
-            if (this.options.code && this.isCodeBlockStart(line)) {
-                let codeBlock = this.extractCodeBlock(lines, i);
-                result.push(codeBlock);
-                i += codeBlock.split('\n').length;
-                continue;
-            }
-
-            // Process line
-            let converted = this.processLine(line, lines, i);
-            result.push(converted);
-            i++;
-        }
-
-        return result.join('\n');
+    classify(f) {
+        if (f.numericDensity > 0.08 && f.hasTable) return { type: 'data_report', label: '数据报告' };
+        if (f.numericDensity > 0.13) return { type: 'data_report', label: '数据报告' };
+        if (f.hasDate && (f.upperRatio > 0.08 || f.avgLen < 50 || f.hasMeetingKeywords)) return { type: 'meeting_notes', label: '会议记录' };
+        if (f.hasEmailHeaders) return { type: 'meeting_notes', label: '会议记录' };
+        if (f.hasMeetingKeywords && f.upperRatio > 0.05) return { type: 'meeting_notes', label: '会议记录' };
+        if ((f.codeDensity > 0.15 || f.hasSqlBlock) && f.proseDensity < 0.20 && !f.firstLineIsTitle) return { type: 'code_snippet', label: '代码片段' };
+        if (f.firstLineIsTitle && f.indentDepth >= 3) return { type: 'technical_doc', label: '技术文档' };
+        if (f.codeDensity > 0.02 && f.indentDepth >= 2 && f.proseDensity < 0.50) return { type: 'technical_doc', label: '技术文档' };
+        if (f.hasCodeBlock && f.indentDepth >= 2) return { type: 'technical_doc', label: '技术文档' };
+        if (f.hasTechPatterns) return { type: 'technical_doc', label: '技术文档' };
+        return { type: 'general_prose', label: '通用文本' };
     }
 
-    isCodeBlockStart(line) {
-        return /^(    |\t)/.test(line) || 
-               /^(function|class|def|const|let|var|if|for|while|import|from)\s/.test(line.trim());
-    }
-
-    extractCodeBlock(lines, startIndex) {
-        let codeLines = [];
-        let language = this.detectLanguage(lines[startIndex]);
-        
-        for (let i = startIndex; i < lines.length; i++) {
-            let line = lines[i];
-            if (/^(    |\t)/.test(line) || 
-                (/^\s*$/.test(line) && codeLines.length > 0) ||
-                (/^(function|class|def|const|let|var|if|for|while|import|from|return|print)/.test(line.trim()))) {
-                codeLines.push(line.replace(/^(    |\t)/, ''));
-            } else if (codeLines.length > 0) {
-                break;
-            } else {
-                codeLines.push(line);
-                break;
-            }
-        }
-        
-        return '```' + language + '\n' + codeLines.join('\n') + '\n```';
-    }
-
-    detectLanguage(line) {
-        let trimmed = line.trim();
-        if (/^(import|from|def|class)\s/.test(trimmed) || /^(print\(|#)/.test(trimmed)) return 'python';
-        if (/^(const|let|var|function|import|export)\s/.test(trimmed) || trimmed.includes('=>')) return 'javascript';
-        if (/^(public|private|class|import|package)\s/.test(trimmed)) return 'java';
-        if (trimmed.startsWith('#include') || trimmed.startsWith('using namespace')) return 'cpp';
-        return '';
-    }
-
-    processLine(line, lines, index) {
-        let content = line.trim();
-        
-        // Header detection
-        if (this.options.headers) {
-            if (content === content.toUpperCase() && content.length > 3 && content.length < 50) {
-                return `## ${content}`;
-            }
-            if (index < lines.length - 1) {
-                let nextLine = lines[index + 1];
-                if (/^[=-]{3,}$/.test(nextLine.trim()) && content.length < 50) {
-                    return `# ${content}`;
-                }
-            }
-        }
-
-        // List detection
-        if (this.options.lists) {
-            if (/^[•·\-\*]\s/.test(content)) {
-                return `- ${content.substring(2).trim()}`;
-            }
-            if (/^\d+[.\)]\s/.test(content)) {
-                return content;
-            }
-        }
-
-        // Inline formatting
-        if (this.options.emphasis) {
-            content = content.replace(/\b([A-Z]{3,})\b/g, '**$1**');
-        }
-
-        if (this.options.links) {
-            content = content.replace(
-                /(https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g,
-                '[$1]($1)'
-            );
-            content = content.replace(
-                /\b([\w.-]+@[\w.-]+\.[a-zA-Z]{2,})\b/g,
-                '[$1](mailto:$1)'
-            );
-        }
-
-        return content;
+    _empty() {
+        return { codeDensity: 0, indentDepth: 0, upperRatio: 0, hasTable: false, avgLen: 0, hasDate: false, hasEmailHeaders: false, numericDensity: 0 };
     }
 }
 
-// Main app
+const DOC_TYPE_CONFIGS = {
+    technical_doc: {
+        label: '技术文档',
+        system: '你是专业的技术文档格式化专家，擅长将混合了代码、配置和说明的技术文本转换为规范 Markdown。',
+        template: `{HEADING_INSTRUCTION}
+
+将以下技术文档转换为 Markdown。规则：
+1. 代码、命令、配置内容用 fenced code block 包裹并标注语言
+2. 函数名、变量名、路径用 \`inline code\` 标记
+3. 参数/选项列表优先转为 Markdown 表格
+4. 保留所有技术细节，不做解释性改动
+
+示例输入：
+INSTALLATION
+    Requirements: Python 3.8+
+    pip install mylib
+
+    Config options
+        timeout: int  default 30
+        retry: bool   default True
+
+示例输出：
+## Installation
+
+**Requirements:** Python 3.8+
+
+\`\`\`bash
+pip install mylib
+\`\`\`
+
+### Config Options
+
+| 参数 | 类型 | 默认值 |
+|------|------|--------|
+| \`timeout\` | int | 30 |
+| \`retry\` | bool | True |
+
+---
+
+待转换文本：
+{TEXT}`
+    },
+
+    meeting_notes: {
+        label: '会议记录',
+        system: '你是专业的会议记录整理助手，擅长将非结构化会议文本转换为结构清晰的 Markdown。',
+        template: `{HEADING_INSTRUCTION}
+
+将以下会议记录转换为 Markdown。规则：
+1. Action items / 待办事项转换为 GitHub 任务列表格式 \`- [ ] 内容\`
+2. 日期时间精确保留，不得修改
+3. 与会人员列为无序列表
+4. 决策结论用粗体标注
+
+示例输入：
+Weekly Sync  2024-01-15  3:00PM
+Attendees: Alice, Bob, Carol
+
+Discussion
+    Decided to delay launch to Q2
+
+Action Items
+    Bob: update roadmap by Friday
+    Alice: send client email
+
+示例输出：
+## Weekly Sync
+
+**日期：** 2024-01-15 15:00
+
+**与会人员：** Alice、Bob、Carol
+
+### 讨论
+
+**决策：** 将发布延迟至 Q2
+
+### Action Items
+
+- [ ] Bob：在周五前更新 roadmap
+- [ ] Alice：发送客户邮件
+
+---
+
+待转换文本：
+{TEXT}`
+    },
+
+    code_snippet: {
+        label: '代码片段',
+        system: '你是代码文档专家。输入文本主体是源代码，需要正确格式化为带语言标注的 Markdown 代码块。',
+        template: `{HEADING_INSTRUCTION}
+
+将以下内容转换为 Markdown。规则：
+1. 代码主体用 fenced code block 包裹并标注编程语言
+2. 注释和说明性文字保留在代码块外作为正文
+3. 多段代码之间用简短说明文字分隔
+4. 只输出 Markdown，不添加原文没有的解释
+
+示例输入：
+Calculate fibonacci sequence
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n-1) + fib(n-2)
+
+Usage:
+print(fib(10))  # 55
+
+示例输出：
+## Calculate Fibonacci Sequence
+
+\`\`\`python
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n-1) + fib(n-2)
+\`\`\`
+
+使用示例：
+
+\`\`\`python
+print(fib(10))  # 55
+\`\`\`
+
+---
+
+待转换文本：
+{TEXT}`
+    },
+
+    data_report: {
+        label: '数据报告',
+        system: '你是数据报告格式化专家，擅长将含有大量数字、表格和统计数据的文本转换为规范 Markdown。',
+        template: `{HEADING_INSTRUCTION}
+
+将以下数据报告转换为 Markdown。规则：
+1. 对齐的列式数据必须转换为 Markdown 表格
+2. 所有数字和百分比精确保留，不得四舍五入或省略
+3. 关键指标（合计、最大值等）用粗体标注
+4. 时间序列数据优先用表格而非列表
+
+示例输入：
+Q3 Sales Report
+Product      Units    Revenue    Change
+Widget A     1204     $24,080    +12.5%
+Widget B     856      $17,120    -3.2%
+Total        2060     $41,200    +5.8%
+
+示例输出：
+## Q3 Sales Report
+
+| 产品 | 销量 | 营收 | 变化 |
+|------|------|------|------|
+| Widget A | 1,204 | $24,080 | +12.5% |
+| Widget B | 856 | $17,120 | -3.2% |
+| **合计** | **2,060** | **$41,200** | **+5.8%** |
+
+---
+
+待转换文本：
+{TEXT}`
+    },
+
+    general_prose: {
+        label: '通用文本',
+        system: '你是专业的文档格式化助手，将纯文本转换为格式规范的 Markdown。',
+        template: `{HEADING_INSTRUCTION}
+
+将以下文本转换为 Markdown。规则：
+1. 根据上方标题层级规则分配各级标题
+2. 识别并转换列表、链接、邮箱地址
+3. 如文本中有缩进的代码片段或命令，用 fenced code block 包裹并标注语言
+4. 段落间保持适当空行
+5. 保持原文语义，不添加原文没有的内容
+6. 只输出 Markdown，不要添加解释
+
+---
+
+待转换文本：
+{TEXT}`
+    }
+};
+
 class MarkdownConverterApp {
     constructor() {
-        this.currentMode = 'ai';
-        this.config = DEFAULT_CONFIG;
+        this.config = { ...DEFAULT_CONFIG };
+        this.extractor = new DocumentFeatureExtractor();
+        this.docTypeAutoDetected = null;
         this.init();
     }
 
     async init() {
         await this.loadConfig();
         this.bindEvents();
-        this.updateUI();
+        this.checkPendingText();
     }
 
     async loadConfig() {
-        const result = await chrome.storage.local.get(['apiKey', 'model', 'mode']);
+        const result = await chrome.storage.local.get(['apiKey', 'model', 'headingLevel', 'styleTemplate']);
         this.config.apiKey = result.apiKey || DEFAULT_CONFIG.apiKey;
         this.config.model = result.model || DEFAULT_CONFIG.model;
-        this.currentMode = result.mode || DEFAULT_CONFIG.mode;
-        
-        // Apply to UI
+        this.config.headingLevel = result.headingLevel != null ? result.headingLevel : DEFAULT_CONFIG.headingLevel;
+        this.config.styleTemplate = result.styleTemplate || DEFAULT_CONFIG.styleTemplate;
+
         document.getElementById('api-key').value = this.config.apiKey;
         document.getElementById('ai-model').value = this.config.model;
-        this.setMode(this.currentMode);
+        document.getElementById('heading-level').value = this.config.headingLevel;
+        document.getElementById('style-template').value = this.config.styleTemplate;
+        this.updateStyleCounter(this.config.styleTemplate.length);
     }
 
     async saveConfig() {
         await chrome.storage.local.set({
             apiKey: this.config.apiKey,
             model: this.config.model,
-            mode: this.currentMode
+            headingLevel: this.config.headingLevel,
+            styleTemplate: this.config.styleTemplate
         });
     }
 
-    bindEvents() {
-        // Mode switch
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.setMode(btn.dataset.mode);
-            });
-        });
+    async checkPendingText() {
+        const result = await chrome.storage.local.get(['pendingText']);
+        if (result.pendingText) {
+            document.getElementById('input-text').value = result.pendingText;
+            chrome.storage.local.remove('pendingText');
+        }
+    }
 
-        // API settings
+    bindEvents() {
         document.getElementById('toggle-api').addEventListener('click', () => {
             document.getElementById('api-panel').classList.toggle('hidden');
         });
@@ -233,54 +336,78 @@ class MarkdownConverterApp {
             this.saveConfig();
         });
 
+        document.getElementById('heading-level').addEventListener('change', (e) => {
+            this.config.headingLevel = parseInt(e.target.value);
+            this.saveConfig();
+        });
+
         document.getElementById('test-api').addEventListener('click', () => this.testConnection());
 
-        // Input actions
+        document.getElementById('style-template').addEventListener('input', (e) => {
+            this.config.styleTemplate = e.target.value.slice(0, 800);
+            if (e.target.value.length > 800) e.target.value = this.config.styleTemplate;
+            this.updateStyleCounter(this.config.styleTemplate.length);
+            this.saveConfig();
+        });
+
+        document.getElementById('clear-style-template').addEventListener('click', () => {
+            document.getElementById('style-template').value = '';
+            this.config.styleTemplate = '';
+            this.updateStyleCounter(0);
+            this.saveConfig();
+        });
+
         document.getElementById('paste-btn').addEventListener('click', () => this.pasteText());
         document.getElementById('clear-btn').addEventListener('click', () => this.clearAll());
         document.getElementById('sample-btn').addEventListener('click', () => this.loadSample());
 
-        // Convert
+        document.getElementById('input-text').addEventListener('input', () => this.autoDetectType());
+
         document.getElementById('convert-btn').addEventListener('click', () => this.convert());
 
-        // Output actions
         document.getElementById('copy-btn').addEventListener('click', () => this.copyOutput());
         document.getElementById('download-btn').addEventListener('click', () => this.downloadOutput());
         document.getElementById('preview-toggle').addEventListener('click', () => this.togglePreview());
 
-        // Open side panel
         document.getElementById('open-sidepanel').addEventListener('click', () => {
             chrome.sidePanel.open({});
         });
     }
 
-    setMode(mode) {
-        this.currentMode = mode;
-        
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.mode === mode);
-        });
-
-        const apiSettings = document.getElementById('api-settings');
-        const btnText = document.getElementById('btn-text');
-        
-        if (mode === 'ai') {
-            apiSettings.classList.remove('hidden');
-            btnText.textContent = 'AI 智能转换';
-        } else {
-            apiSettings.classList.add('hidden');
-            btnText.textContent = '本地转换';
+    autoDetectType() {
+        const input = document.getElementById('input-text').value;
+        if (!input.trim()) return;
+        const features = this.extractor.extract(input);
+        const docType = this.extractor.classify(features);
+        const select = document.getElementById('doc-type-override');
+        if (select.value === 'auto' || select.value === this.docTypeAutoDetected) {
+            select.value = docType.type;
+            this.docTypeAutoDetected = docType.type;
         }
-        
-        this.saveConfig();
+    }
+
+    updateStyleCounter(len) {
+        const counter = document.getElementById('style-template-counter');
+        counter.textContent = `${len} / 800`;
+        counter.classList.toggle('over-limit', len >= 800);
+    }
+
+    analyzeMarkdown(markdown) {
+        const headings = (markdown.match(/^#{1,6} /gm) || []).length;
+        const codeBlocks = Math.floor((markdown.match(/^```/gm) || []).length / 2);
+        const tables = (markdown.match(/^\|[-: |]+\|$/gm) || []).length;
+        const listItems = (markdown.match(/^[-*+] /gm) || []).length
+                        + (markdown.match(/^\d+\. /gm) || []).length;
+        return { headings, codeBlocks, tables, listItems };
     }
 
     async pasteText() {
         try {
             const text = await navigator.clipboard.readText();
             document.getElementById('input-text').value = text;
+            this.autoDetectType();
             this.showStatus('已粘贴剪贴板内容');
-        } catch (err) {
+        } catch {
             this.showStatus('无法访问剪贴板，请手动粘贴', 'error');
         }
     }
@@ -290,11 +417,13 @@ class MarkdownConverterApp {
         document.getElementById('output-text').value = '';
         document.getElementById('output-preview').innerHTML = '';
         document.getElementById('output-preview').classList.add('hidden');
+        document.getElementById('doc-type-override').value = 'auto';
+        this.docTypeAutoDetected = null;
         this.showStatus('已清空');
     }
 
     loadSample() {
-        const sample = `Project Overview
+        document.getElementById('input-text').value = `Project Overview
 ================
 
 This is a sample document.
@@ -303,15 +432,13 @@ Introduction
     Goals
         - Improve by 25%
         - Reduce costs
-    
-Code Example
-    function hello() {
-        console.log("Hello World");
-    }
+
+    Code Example
+        function hello() {
+            console.log("Hello World");
+        }
 
 Contact: https://example.com`;
-        
-        document.getElementById('input-text').value = sample;
         this.showStatus('示例已加载');
     }
 
@@ -324,25 +451,36 @@ Contact: https://example.com`;
 
         const btn = document.getElementById('convert-btn');
         const loading = document.getElementById('loading');
-        
+
         btn.disabled = true;
         loading.classList.remove('hidden');
-        this.showStatus('转换中...');
+        this.showStatus('分析文档结构...');
 
         try {
-            let output;
-            
-            if (this.currentMode === 'ai') {
-                output = await this.convertWithAI(input);
+            const selectValue = document.getElementById('doc-type-override').value;
+            let docType;
+            if (selectValue === 'auto') {
+                const features = this.extractor.extract(input);
+                docType = this.extractor.classify(features);
+                document.getElementById('doc-type-override').value = docType.type;
+                this.docTypeAutoDetected = docType.type;
             } else {
-                const converter = new TextToMarkdownConverter();
-                output = converter.convert(input);
+                docType = { type: selectValue, label: DOC_TYPE_CONFIGS[selectValue].label };
             }
-            
+
+            this.showStatus(`${docType.label}，转换中...`);
+            const output = await this.convertWithAI(input, docType.type);
+
             document.getElementById('output-text').value = output;
             this.updatePreview(output);
-            this.showStatus(this.currentMode === 'ai' ? 'AI 转换完成' : '转换完成', 'success');
-            
+
+            const { headings, codeBlocks, tables, listItems } = this.analyzeMarkdown(output);
+            const parts = [];
+            if (headings > 0) parts.push(`${headings} 标题`);
+            if (codeBlocks > 0) parts.push(`${codeBlocks} 代码块`);
+            if (tables > 0) parts.push(`${tables} 表格`);
+            if (listItems > 0) parts.push(`${listItems} 列表项`);
+            this.showStatus(`完成 · ${parts.join(' · ') || docType.label}`, 'success');
         } catch (error) {
             this.showStatus('转换失败: ' + error.message, 'error');
         } finally {
@@ -351,13 +489,19 @@ Contact: https://example.com`;
         }
     }
 
-    async convertWithAI(text) {
-        if (!this.config.apiKey) {
-            throw new Error('请先设置 API Key');
+    async convertWithAI(text, docType) {
+        if (!this.config.apiKey) throw new Error('请先设置 API Key');
+
+        const typeConfig = DOC_TYPE_CONFIGS[docType] || DOC_TYPE_CONFIGS.general_prose;
+        const headingInstruction = buildHeadingInstruction(this.config.headingLevel);
+        let prompt = typeConfig.template
+            .replace('{HEADING_INSTRUCTION}', headingInstruction)
+            .replace('{TEXT}', text);
+
+        if (this.config.styleTemplate && this.config.styleTemplate.trim()) {
+            prompt += `\n\n## 用户风格参考\n\n以下是用户提供的 Markdown 风格样例，请模仿其格式习惯（标题选用、分隔符、代码块写法、表格样式等），但不要复制其中的内容：\n\n${this.config.styleTemplate.trim()}\n\n**最终约束（优先级高于上方样例）：** ${headingInstruction}`;
         }
 
-        const prompt = AI_PROMPT_TEMPLATE.replace('{text}', text);
-        
         const response = await fetch(`${this.config.apiBaseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -367,26 +511,25 @@ Contact: https://example.com`;
             body: JSON.stringify({
                 model: this.config.model,
                 messages: [
-                    { role: 'system', content: '你是一个专业的 Markdown 格式转换助手。' },
+                    { role: 'system', content: typeConfig.system },
                     { role: 'user', content: prompt }
                 ],
                 temperature: 0.3
             })
         });
-        
+
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || `HTTP ${response.status}`);
+            const err = await response.json();
+            throw new Error(err.error?.message || `HTTP ${response.status}`);
         }
-        
+
         const data = await response.json();
         let result = data.choices[0].message.content;
-        
-        // Clean up
-        result = result.replace(/^```markdown\n/, '');
-        result = result.replace(/^```\n/, '');
-        result = result.replace(/\n```$/, '');
-        
+        result = result.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
+        // If the fence count is odd, the last code block was not closed by the model
+        if ((result.match(/^```/gm) || []).length % 2 !== 0) {
+            result = result.trimEnd() + '\n```';
+        }
         return result;
     }
 
@@ -395,52 +538,59 @@ Contact: https://example.com`;
             this.showStatus('请先输入 API Key', 'error');
             return;
         }
-        
         this.showStatus('正在测试连接...');
-        
         try {
             const response = await fetch(`${this.config.apiBaseUrl}/models`, {
                 headers: { 'Authorization': `Bearer ${this.config.apiKey}` }
             });
-            
-            if (response.ok) {
-                this.showStatus('连接成功！', 'success');
-            } else {
-                this.showStatus('连接失败: ' + response.status, 'error');
-            }
+            this.showStatus(response.ok ? '连接成功！' : '连接失败: ' + response.status, response.ok ? 'success' : 'error');
         } catch (error) {
             this.showStatus('连接失败: ' + error.message, 'error');
         }
     }
 
-    updatePreview(markdown) {
-        const preview = document.getElementById('output-preview');
-        // Simple markdown to HTML conversion for preview
-        let html = markdown
-            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/^\* (.*$)/gim, '<li>$1</li>')
+    markdownToHtml(md) {
+        md = md.replace(/(\|[^\n]+\n?)+/g, block => {
+            const lines = block.trim().split('\n').filter(l => l.trim());
+            const sepIdx = lines.findIndex(l => /^\|[\s\-:|]+\|$/.test(l.trim()));
+            if (sepIdx < 0) return block;
+
+            const toRow = (line, tag) =>
+                '<tr>' + line.trim().replace(/^\||\|$/g, '').split('|')
+                    .map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+
+            const thead = lines.slice(0, sepIdx).map(l => toRow(l, 'th')).join('');
+            const tbody = lines.slice(sepIdx + 1).filter(l => l.trim()).map(l => toRow(l, 'td')).join('');
+            return `<table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+        });
+
+        return md
+            .replace(/^#{6} (.+)$/gm, '<h6>$1</h6>')
+            .replace(/^#{5} (.+)$/gm, '<h5>$1</h5>')
+            .replace(/^#{4} (.+)$/gm, '<h4>$1</h4>')
+            .replace(/^#{3} (.+)$/gm, '<h3>$1</h3>')
+            .replace(/^#{2} (.+)$/gm, '<h2>$1</h2>')
+            .replace(/^#{1} (.+)$/gm, '<h1>$1</h1>')
+            .replace(/^\- \[ \] (.+)$/gm, '<li><input type="checkbox" disabled> $1</li>')
+            .replace(/^\- \[x\] (.+)$/gm, '<li><input type="checkbox" checked disabled> $1</li>')
+            .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
             .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-        
-        preview.innerHTML = html;
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+            .replace(/\n/g, '<br>');
+    }
+
+    updatePreview(markdown) {
+        document.getElementById('output-preview').innerHTML = this.markdownToHtml(markdown);
     }
 
     togglePreview() {
         const preview = document.getElementById('output-preview');
         const btn = document.getElementById('preview-toggle');
-        
-        if (preview.classList.contains('hidden')) {
-            preview.classList.remove('hidden');
-            btn.textContent = '隐藏预览';
-        } else {
-            preview.classList.add('hidden');
-            btn.textContent = '预览';
-        }
+        const hidden = preview.classList.toggle('hidden');
+        btn.textContent = hidden ? '预览' : '隐藏预览';
     }
 
     copyOutput() {
@@ -456,7 +606,6 @@ Contact: https://example.com`;
             this.showStatus('没有内容可下载', 'error');
             return;
         }
-        
         const blob = new Blob([output], { type: 'text/markdown' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -470,24 +619,16 @@ Contact: https://example.com`;
     }
 
     showStatus(message, type = 'info') {
-        const statusEl = document.getElementById('status-text');
-        statusEl.textContent = message;
-        statusEl.style.color = type === 'error' ? 'var(--error)' : 
-                               type === 'success' ? 'var(--success)' : 
-                               'var(--text-secondary)';
-        
+        const el = document.getElementById('status-text');
+        el.textContent = message;
+        el.style.color = type === 'error' ? 'var(--error)'
+            : type === 'success' ? 'var(--success)'
+            : 'var(--text-secondary)';
         setTimeout(() => {
-            statusEl.textContent = '就绪';
-            statusEl.style.color = 'var(--text-secondary)';
+            el.textContent = '就绪';
+            el.style.color = 'var(--text-secondary)';
         }, 3000);
-    }
-
-    updateUI() {
-        // Any additional UI updates
     }
 }
 
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    new MarkdownConverterApp();
-});
+document.addEventListener('DOMContentLoaded', () => new MarkdownConverterApp());

@@ -19,30 +19,36 @@
             </button>
         </header>
 
-        <!-- Mode Switch -->
-        <div class="mode-switch">
-            <button class="mode-btn active" data-mode="ai">
-                <span>🧠</span> AI
-            </button>
-            <button class="mode-btn" data-mode="local">
-                <span>⚡</span> 本地
-            </button>
-        </div>
-
-        <!-- API Settings (AI mode only) -->
-        <div id="api-settings" class="section">
+        <!-- API Settings -->
+        <div class="section">
             <div class="section-header">
                 <span>API 设置</span>
                 <button id="toggle-api" class="link-btn">显示/隐藏</button>
             </div>
             <div id="api-panel" class="api-panel hidden">
                 <input type="password" id="api-key" placeholder="DashScope API Key" class="input">
-                <select id="ai-model" class="select">
-                    <option value="qwen-turbo">Turbo (快速)</option>
-                    <option value="qwen-plus" selected>Plus (平衡)</option>
-                    <option value="qwen-max">Max (最强)</option>
-                </select>
+                <div class="setting-row">
+                    <select id="ai-model" class="select">
+                        <option value="qwen-turbo">Turbo (快速)</option>
+                        <option value="qwen-plus" selected>Plus (平衡)</option>
+                        <option value="qwen-max">Max (最强)</option>
+                    </select>
+                    <select id="heading-level" class="select">
+                        <option value="1"># H1</option>
+                        <option value="2">## H2</option>
+                        <option value="3">### H3</option>
+                        <option value="4">#### H4</option>
+                    </select>
+                </div>
+                <p class="help-text">标题起始级别：输出的最高级标题</p>
                 <button id="test-api" class="btn-small">测试连接</button>
+                <div class="style-template-header">
+                    <label class="template-label">风格模板</label>
+                    <span id="style-template-counter" class="char-counter">0 / 800</span>
+                </div>
+                <textarea id="style-template" class="textarea style-template-area"
+                    placeholder="粘贴喜欢的 Markdown 样例，AI 会模仿其格式风格..."></textarea>
+                <button id="clear-style-template" class="btn-small secondary" style="align-self:flex-end">清除</button>
             </div>
         </div>
 
@@ -60,10 +66,20 @@
         </div>
 
         <!-- Convert Button -->
-        <button id="convert-btn" class="btn-primary">
-            <span class="btn-icon">✨</span>
-            <span id="btn-text">AI 智能转换</span>
-        </button>
+        <div class="convert-row">
+            <button id="convert-btn" class="btn-primary">
+                <span class="btn-icon">✨</span>
+                <span id="btn-text">AI 智能转换</span>
+            </button>
+            <select id="doc-type-override" class="select doc-type-select" title="文档类型">
+                <option value="auto">自动识别</option>
+                <option value="technical_doc">技术文档</option>
+                <option value="meeting_notes">会议记录</option>
+                <option value="code_snippet">代码片段</option>
+                <option value="data_report">数据报告</option>
+                <option value="general_prose">通用文本</option>
+            </select>
+        </div>
 
         <!-- Loading Indicator -->
         <div id="loading" class="loading hidden">

@@ -77,37 +77,6 @@ body {
     background: var(--bg);
 }
 
-/* Mode Switch */
-.mode-switch {
-    display: flex;
-    gap: 8px;
-}
-
-.mode-btn {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    transition: all 0.2s;
-}
-
-.mode-btn:hover {
-    border-color: var(--primary);
-}
-
-.mode-btn.active {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: white;
-    border-color: transparent;
-}
-
 /* Sections */
 .section {
     background: var(--surface);
@@ -133,6 +102,67 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+.style-template-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+}
+
+.template-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.char-counter {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.char-counter.over-limit {
+    color: var(--error);
+    font-weight: 600;
+}
+
+.style-template-area {
+    min-height: 60px;
+    max-height: 100px;
+    font-size: 12px;
+    resize: vertical;
+}
+
+.setting-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.convert-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.convert-row .btn-primary {
+    flex: 1;
+}
+
+.doc-type-select {
+    width: 100px;
+    padding: 8px 6px;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.help-text {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: -2px;
 }
 
 .api-panel.hidden {

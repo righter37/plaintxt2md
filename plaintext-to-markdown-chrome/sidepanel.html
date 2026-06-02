@@ -19,24 +19,6 @@
             </div>
         </header>
 
-        <!-- Mode Selection -->
-        <div class="mode-bar">
-            <button class="mode-btn active" data-mode="ai">
-                <span class="mode-icon">🧠</span>
-                <div class="mode-info">
-                    <div class="mode-name">AI 智能转换</div>
-                    <div class="mode-desc">大模型分析，效果更好</div>
-                </div>
-            </button>
-            <button class="mode-btn" data-mode="local">
-                <span class="mode-icon">⚡</span>
-                <div class="mode-info">
-                    <div class="mode-name">本地转换</div>
-                    <div class="mode-desc">无需网络，即时响应</div>
-                </div>
-            </button>
-        </div>
-
         <!-- Settings Panel -->
         <div class="settings-panel" id="settings-panel">
             <div class="panel-header">
@@ -52,7 +34,7 @@
                     </div>
                     <p class="help-text">在 <a href="https://dashscope.aliyun.com/" target="_blank">DashScope 控制台</a> 获取 API Key</p>
                 </div>
-                
+
                 <div class="setting-row">
                     <div class="setting-group">
                         <label>AI 模型</label>
@@ -62,19 +44,32 @@
                             <option value="qwen-max">通义千问 Max (最强)</option>
                         </select>
                     </div>
-                    
+
                     <div class="setting-group">
-                        <label>输出风格</label>
-                        <select id="output-style" class="select">
-                            <option value="standard" selected>标准 Markdown</option>
-                            <option value="github">GitHub 风格</option>
-                            <option value="minimal">简洁风格</option>
-                            <option value="detailed">详细风格</option>
+                        <label>标题起始级别</label>
+                        <select id="heading-level" class="select">
+                            <option value="1"># H1（最高级）</option>
+                            <option value="2">## H2</option>
+                            <option value="3">### H3</option>
+                            <option value="4">#### H4</option>
                         </select>
                     </div>
                 </div>
-                
+
                 <button id="test-api" class="btn-secondary">测试连接</button>
+
+                <div class="setting-group">
+                    <div class="style-template-header">
+                        <label>风格模板 <span class="label-optional">（可选）</span></label>
+                        <span id="style-template-counter" class="char-counter">0 / 800</span>
+                    </div>
+                    <textarea id="style-template" class="textarea style-template-area"
+                        placeholder="粘贴一段你喜欢的 Markdown 样例，AI 会模仿其格式风格...
+
+例如你偏好的标题层级、分隔符使用、表格或代码块写法等。
+AI 只参考格式，不会复制内容。"></textarea>
+                    <button id="clear-style-template" class="btn-small secondary" style="align-self:flex-end">清除模板</button>
+                </div>
             </div>
         </div>
 
@@ -96,23 +91,37 @@
                 </div>
                 <textarea id="input-text" class="textarea" placeholder="在此粘贴或输入纯文本内容...
 
-AI 会智能分析：
-- 识别标题层级和文档结构
-- 检测代码块并标注语言
-- 识别表格、列表、链接
-- 判断段落边界"></textarea>
+AI 会自动识别文档类型并选择最适合的转换策略：
+- 技术文档：代码块语言识别、参数表格化
+- 会议记录：action items → 任务清单
+- 代码片段：精确语言检测
+- 数据报告：列式数据 → Markdown 表格
+- 通用文本：标准结构化转换"></textarea>
                 <div class="input-stats" id="input-stats">0 字符 | 0 行</div>
             </div>
 
             <!-- Convert Button -->
             <div class="convert-bar">
-                <button id="convert-btn" class="btn-convert">
-                    <span class="btn-icon">✨</span>
-                    <span id="btn-text">AI 智能转换</span>
-                </button>
+                <div class="convert-row">
+                    <button id="convert-btn" class="btn-convert">
+                        <span class="btn-icon">✨</span>
+                        <span id="btn-text">AI 智能转换</span>
+                    </button>
+                    <div class="doc-type-selector">
+                        <label class="selector-label">文档类型</label>
+                        <select id="doc-type-override" class="select doc-type-select">
+                            <option value="auto">自动识别</option>
+                            <option value="technical_doc">技术文档</option>
+                            <option value="meeting_notes">会议记录</option>
+                            <option value="code_snippet">代码片段</option>
+                            <option value="data_report">数据报告</option>
+                            <option value="general_prose">通用文本</option>
+                        </select>
+                    </div>
+                </div>
                 <div id="loading-indicator" class="loading hidden">
                     <div class="spinner"></div>
-                    <span>AI 正在分析文本结构...</span>
+                    <span id="loading-text">分析文档结构...</span>
                 </div>
             </div>
 
@@ -133,25 +142,25 @@ AI 会智能分析：
                         <button id="download-btn" class="btn-small">下载</button>
                     </div>
                 </div>
-                
+
                 <div class="output-container">
                     <!-- Source View -->
                     <div id="view-source" class="view-content">
                         <textarea id="output-text" class="textarea output" readonly placeholder="转换后的 Markdown 将显示在这里..."></textarea>
                     </div>
-                    
+
                     <!-- Preview View -->
                     <div id="view-preview" class="view-content hidden">
                         <div id="preview-content" class="preview-area"></div>
                     </div>
-                    
+
                     <!-- Split View -->
                     <div id="view-split" class="view-content split hidden">
                         <textarea id="output-text-split" class="textarea output" readonly></textarea>
                         <div id="preview-content-split" class="preview-area"></div>
                     </div>
                 </div>
-                
+
                 <div class="output-stats" id="output-stats">0 字符</div>
             </div>
         </div>
@@ -160,8 +169,8 @@ AI 会智能分析：
         <footer class="footer">
             <span id="status-text">就绪</span>
             <div class="shortcuts">
-                <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> 打开弹出窗口
-                <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> 打开侧边栏
+                <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> 弹出窗口
+                <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> 侧边栏
             </div>
         </footer>
     </div>
