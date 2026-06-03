@@ -10,7 +10,7 @@
 
 ### ✨ 功能特性
 
-- **🧠 AI 智能转换**：接入阿里云 DashScope 大模型，智能识别文档结构
+- **🧠 AI 智能转换**：接入大模型智能识别文档结构，支持阿里通义千问 / Kimi / DeepSeek / 智谱 GLM 等多家供应商下拉切换
 - **⚡ 本地转换**：无需网络，使用本地规则引擎快速转换
 - **🔍 智能识别**：
   - 自动识别标题层级（H1-H6）
@@ -46,8 +46,11 @@ php -S localhost:8080
 ### 🔧 配置 AI 功能
 
 1. 点击右上角的 **"设置"** 按钮
-2. 在 **API Key** 栏填入你的阿里云 DashScope API Key
-3. 点击 **"测试连接"** 验证是否配置成功
+2. 选择 **AI 供应商**（阿里通义千问 / Kimi / DeepSeek / 智谱 GLM），Base URL 会自动填入
+3. 在 **API Key** 栏填入对应供应商的 Key
+4. 点击 **"测试连接"** 验证是否配置成功
+
+> ⚠️ 网页版直接从浏览器调用 API，部分供应商可能因 CORS 限制无法访问；如遇此情况请改用 Chrome 插件版（不受 CORS 限制）。
 
 > 💡 **获取 API Key**：
 > 1. 访问 [阿里云 DashScope](https://dashscope.aliyun.com/)
@@ -116,7 +119,7 @@ function calculateTotal(items) {
 - **纯前端实现**：HTML + CSS + JavaScript
 - **UI 框架**：Tailwind CSS
 - **Markdown 渲染**：Marked.js
-- **AI API**：阿里云 DashScope（通义千问）
+- **AI API**：OpenAI 兼容接口（阿里通义千问 / Kimi / DeepSeek / 智谱 GLM）
 
 ### 📦 项目结构
 
@@ -151,7 +154,7 @@ MIT License - 自由使用和修改
 
 ### ✨ Features
 
-- **🧠 AI-Powered Conversion**: Integrated with Alibaba Cloud DashScope LLM for intelligent document structure analysis
+- **🧠 AI-Powered Conversion**: Intelligent document structure analysis via multiple OpenAI-compatible providers (Alibaba Qwen / Kimi / DeepSeek / Zhipu GLM)
 - **⚡ Local Conversion**: Fast offline conversion using local rule engine
 - **🔍 Smart Recognition**:
   - Auto-detect heading levels (H1-H6)
@@ -177,8 +180,11 @@ Then visit: `http://localhost:8080`
 ### 🔧 Configure AI Feature
 
 1. Click **"Settings"** button (top right)
-2. Enter your DashScope API Key in the **API Key** field
-3. Click **"Test Connection"** to verify
+2. Pick an **AI provider** (Qwen / Kimi / DeepSeek / Zhipu GLM) — the Base URL is filled in automatically
+3. Enter that provider's API Key in the **API Key** field
+4. Click **"Test Connection"** to verify
+
+> ⚠️ The web app calls provider APIs directly from the browser; some providers may be blocked by CORS. If that happens, use the Chrome extension instead (not subject to CORS).
 
 > 💡 **Get API Key**:
 > 1. Visit [Alibaba Cloud DashScope](https://dashscope.aliyun.com/)
@@ -191,7 +197,7 @@ Then visit: `http://localhost:8080`
 - **Pure Frontend**: HTML + CSS + JavaScript
 - **UI Framework**: Tailwind CSS
 - **Markdown Renderer**: Marked.js
-- **AI API**: Alibaba Cloud DashScope (Qwen)
+- **AI API**: OpenAI-compatible endpoints (Alibaba Qwen / Kimi / DeepSeek / Zhipu GLM)
 
 ### ⚠️ Notes
 

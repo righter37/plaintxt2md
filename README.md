@@ -110,7 +110,7 @@
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/711912e8-ac7a-4a6c-b2f9-920050228cf9" />
 
-使用 AI 模式需要获取 API Key，**暂时只接入了阿里云 DashScope**。
+使用 AI 模式需要获取 API Key。现已支持多家 OpenAI 兼容供应商：**阿里通义千问、Kimi（Moonshot）、DeepSeek、智谱 GLM**，在设置里下拉切换即可，各家 Key 独立保存。
 
 <img width="1867" height="924" alt="image" src="https://github.com/user-attachments/assets/41bc0064-7183-4dca-b797-110fb6b5a22c" />
 
@@ -136,7 +136,8 @@
 
 - [ ] 上架 Chrome 应用商店
 - [ ] 支持思维导图结构输出
-- [ ] 接入更多大模型供应商（目前仅阿里云 DashScope）
+- [x] 接入多家大模型供应商（阿里通义千问 / Kimi / DeepSeek / 智谱 GLM）
+- [ ] 接入更多供应商与自定义 OpenAI 兼容端点
 
 ---
 
@@ -196,13 +197,14 @@ Copying documents from one place to another usually destroys their formatting �
 
 ## 🧩 Extension Notes
 
-AI mode requires an API Key. **Only Alibaba Cloud DashScope is supported for now.** A detailed guide lives in the [`plaintext-to-markdown-chrome`](plaintext-to-markdown-chrome/) folder.
+AI mode requires an API Key. Multiple OpenAI-compatible providers are supported — **Alibaba Qwen, Kimi (Moonshot), DeepSeek, and Zhipu GLM** — switchable from a dropdown in settings, with each provider's key stored separately. A detailed guide lives in the [`plaintext-to-markdown-chrome`](plaintext-to-markdown-chrome/) folder.
 
 ## 🔭 Roadmap
 
 - [ ] Publish to the Chrome Web Store
 - [ ] Mind-map structured output
-- [ ] Support more LLM providers (currently DashScope only)
+- [x] Support multiple LLM providers (Qwen / Kimi / DeepSeek / Zhipu GLM)
+- [ ] Support more providers and custom OpenAI-compatible endpoints
 
 ## 📄 License
 

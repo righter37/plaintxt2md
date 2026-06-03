@@ -5,7 +5,8 @@
 ## ✨ 功能特点
 
 - **🎯 智能场景识别**：场景判断在浏览器本地完成（分类准确率 95%+），再套用针对性的转换策略
-- **🧠 AI 智能转换**：调用阿里云 DashScope 大模型，按识别出的场景分析文本结构
+- **🧠 AI 智能转换**：按识别出的场景调用大模型分析文本结构
+- **🔌 多供应商**：阿里通义千问 / Kimi（Moonshot）/ DeepSeek / 智谱 GLM 下拉切换，各家 Key 独立保存
 - **📝 右键菜单**：选中网页文字，右键一键转换
 - **📐 侧边栏模式**：更大界面，适合复杂文档处理
 - **🎯 快捷键**：
@@ -43,20 +44,29 @@
 
 ## 🔧 配置说明
 
+支持以下 OpenAI 兼容供应商，任选其一：
+
+| 供应商 | 获取 API Key |
+|--------|--------------|
+| 阿里通义千问 | [dashscope.aliyun.com](https://dashscope.aliyun.com/) |
+| Kimi (Moonshot) | [platform.moonshot.cn](https://platform.moonshot.cn/console/api-keys) |
+| DeepSeek | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
+| 智谱 GLM | [open.bigmodel.cn](https://open.bigmodel.cn/usercenter/apikeys) |
+
 ### 1. 获取 API Key
 
-1. 访问 [阿里云 DashScope](https://dashscope.aliyun.com/)
-2. 注册/登录账号
-3. 进入控制台创建 API Key
-4. 复制 Key
+1. 访问上表中对应供应商的控制台
+2. 注册/登录账号并创建 API Key
+3. 复制 Key
 
 ### 2. 配置扩展
 
 1. 点击扩展图标打开弹出窗口
 2. 点击「设置」按钮
-3. 在 API Key 栏粘贴你的 Key
-4. 选择 AI 模型（Turbo/Plus/Max）
-5. 点击「测试连接」验证配置
+3. 选择 **AI 供应商**（设置面板会自动跳转对应的 Key 获取链接）
+4. 在 API Key 栏粘贴你的 Key
+5. 选择 AI 模型
+6. 点击「测试连接」验证配置
 
 ## 📖 使用指南
 
@@ -120,7 +130,7 @@ chrome-extension/
 - `activeTab` - 获取当前标签页选中的文字
 - `contextMenus` - 创建右键菜单
 - `sidePanel` - 使用侧边栏功能
-- `https://dashscope.aliyuncs.com/*` - 访问 DashScope API
+- `https://dashscope.aliyuncs.com/*`、`https://api.moonshot.cn/*`、`https://api.deepseek.com/*`、`https://open.bigmodel.cn/*` - 访问各大模型供应商 API
 
 ## ⚠️ 注意事项
 
@@ -130,7 +140,7 @@ chrome-extension/
    - 不要与他人分享你的 API Key
 
 2. **网络要求**
-   - 文本转换由 AI 完成，需要联网访问 DashScope 并配置 API Key
+   - 文本转换由 AI 完成，需要联网访问所选供应商并配置 API Key
    - 仅场景识别（分类器）在浏览器本地运行，无需联网
 
 3. **快捷键冲突**

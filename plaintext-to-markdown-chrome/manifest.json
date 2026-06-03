@@ -13,7 +13,10 @@
     "sidePanel"
   ],
   "host_permissions": [
-    "https://dashscope.aliyuncs.com/*"
+    "https://dashscope.aliyuncs.com/*",
+    "https://api.moonshot.cn/*",
+    "https://api.deepseek.com/*",
+    "https://open.bigmodel.cn/*"
   ],
   "action": {
     "default_popup": "popup.html",

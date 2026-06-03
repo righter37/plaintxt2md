@@ -27,22 +27,23 @@
             </div>
             <div class="panel-content" id="settings-content">
                 <div class="setting-group">
+                    <label>AI 供应商</label>
+                    <select id="ai-provider" class="select"></select>
+                </div>
+
+                <div class="setting-group">
                     <label>API Key</label>
                     <div class="input-group">
-                        <input type="password" id="api-key" class="input" placeholder="输入 DashScope API Key">
+                        <input type="password" id="api-key" class="input" placeholder="输入 API Key">
                         <button id="toggle-key-visibility" class="btn-small">显示</button>
                     </div>
-                    <p class="help-text">在 <a href="https://dashscope.aliyun.com/" target="_blank">DashScope 控制台</a> 获取 API Key</p>
+                    <p class="help-text">在 <a id="api-key-link" href="#" target="_blank">控制台</a> 获取 API Key</p>
                 </div>
 
                 <div class="setting-row">
                     <div class="setting-group">
                         <label>AI 模型</label>
-                        <select id="ai-model" class="select">
-                            <option value="qwen-turbo">通义千问 Turbo (快速)</option>
-                            <option value="qwen-plus" selected>通义千问 Plus (平衡)</option>
-                            <option value="qwen-max">通义千问 Max (最强)</option>
-                        </select>
+                        <select id="ai-model" class="select"></select>
                     </div>
 
                     <div class="setting-group">

@@ -26,13 +26,11 @@
                 <button id="toggle-api" class="link-btn">显示/隐藏</button>
             </div>
             <div id="api-panel" class="api-panel hidden">
-                <input type="password" id="api-key" placeholder="DashScope API Key" class="input">
+                <select id="ai-provider" class="select"></select>
+                <input type="password" id="api-key" placeholder="API Key" class="input">
+                <p class="help-text"><a id="api-key-link" href="#" target="_blank">获取 API Key</a></p>
                 <div class="setting-row">
-                    <select id="ai-model" class="select">
-                        <option value="qwen-turbo">Turbo (快速)</option>
-                        <option value="qwen-plus" selected>Plus (平衡)</option>
-                        <option value="qwen-max">Max (最强)</option>
-                    </select>
+                    <select id="ai-model" class="select"></select>
                     <select id="heading-level" class="select">
                         <option value="1"># H1</option>
                         <option value="2">## H2</option>

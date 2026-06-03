@@ -1,8 +1,56 @@
 // Popup — AI-only, document-type-adaptive Markdown converter
 
+// ─── LLM provider registry (all OpenAI-compatible /chat/completions) ──────────
+const PROVIDERS = {
+    dashscope: {
+        label: '阿里通义千问',
+        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        keyUrl: 'https://dashscope.aliyun.com/',
+        keyName: 'DashScope',
+        models: [
+            { value: 'qwen-turbo', label: '通义千问 Turbo (快速)' },
+            { value: 'qwen-plus',  label: '通义千问 Plus (平衡)' },
+            { value: 'qwen-max',   label: '通义千问 Max (最强)' }
+        ]
+    },
+    moonshot: {
+        label: 'Kimi (Moonshot)',
+        baseUrl: 'https://api.moonshot.cn/v1',
+        keyUrl: 'https://platform.moonshot.cn/console/api-keys',
+        keyName: 'Moonshot',
+        models: [
+            { value: 'moonshot-v1-8k',   label: 'moonshot-v1-8k' },
+            { value: 'moonshot-v1-32k',  label: 'moonshot-v1-32k' },
+            { value: 'moonshot-v1-128k', label: 'moonshot-v1-128k' },
+            { value: 'kimi-latest',      label: 'kimi-latest' }
+        ]
+    },
+    deepseek: {
+        label: 'DeepSeek',
+        baseUrl: 'https://api.deepseek.com/v1',
+        keyUrl: 'https://platform.deepseek.com/api_keys',
+        keyName: 'DeepSeek',
+        models: [
+            { value: 'deepseek-chat',     label: 'deepseek-chat (V3)' },
+            { value: 'deepseek-reasoner', label: 'deepseek-reasoner (R1)' }
+        ]
+    },
+    zhipu: {
+        label: '智谱 GLM',
+        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        keyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
+        keyName: '智谱',
+        models: [
+            { value: 'glm-4-flash', label: 'glm-4-flash (免费)' },
+            { value: 'glm-4-air',   label: 'glm-4-air' },
+            { value: 'glm-4-plus',  label: 'glm-4-plus' }
+        ]
+    }
+};
+
 const DEFAULT_CONFIG = {
-    apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    apiKey: '',
+    provider: 'dashscope',
+    apiKeys: {},          // { [providerId]: apiKey } — each provider keeps its own key
     model: 'qwen-plus',
     headingLevel: 1,
     styleTemplate: ''
@@ -291,14 +339,23 @@ class MarkdownConverterApp {
     }
 
     async loadConfig() {
-        const result = await chrome.storage.local.get(['apiKey', 'model', 'headingLevel', 'styleTemplate']);
-        this.config.apiKey = result.apiKey || DEFAULT_CONFIG.apiKey;
+        const result = await chrome.storage.local.get(['provider', 'apiKeys', 'apiKey', 'model', 'headingLevel', 'styleTemplate']);
+        this.config.provider = PROVIDERS[result.provider] ? result.provider : DEFAULT_CONFIG.provider;
+        this.config.apiKeys = result.apiKeys || {};
+        // migrate legacy single-key config (DashScope-only) to the per-provider map
+        if (result.apiKey && !this.config.apiKeys.dashscope) this.config.apiKeys.dashscope = result.apiKey;
         this.config.model = result.model || DEFAULT_CONFIG.model;
         this.config.headingLevel = result.headingLevel != null ? result.headingLevel : DEFAULT_CONFIG.headingLevel;
         this.config.styleTemplate = result.styleTemplate || DEFAULT_CONFIG.styleTemplate;
 
-        document.getElementById('api-key').value = this.config.apiKey;
+        this.populateProviders();
+        document.getElementById('ai-provider').value = this.config.provider;
+        this.populateModels();
+        // make sure the saved model belongs to the current provider
+        const models = PROVIDERS[this.config.provider].models;
+        if (!models.some(m => m.value === this.config.model)) this.config.model = models[0].value;
         document.getElementById('ai-model').value = this.config.model;
+        this.applyProviderUI();
         document.getElementById('heading-level').value = this.config.headingLevel;
         document.getElementById('style-template').value = this.config.styleTemplate;
         this.updateStyleCounter(this.config.styleTemplate.length);
@@ -306,11 +363,34 @@ class MarkdownConverterApp {
 
     async saveConfig() {
         await chrome.storage.local.set({
-            apiKey: this.config.apiKey,
+            provider: this.config.provider,
+            apiKeys: this.config.apiKeys,
             model: this.config.model,
             headingLevel: this.config.headingLevel,
             styleTemplate: this.config.styleTemplate
         });
+    }
+
+    // Fill the provider dropdown from the registry
+    populateProviders() {
+        document.getElementById('ai-provider').innerHTML = Object.entries(PROVIDERS)
+            .map(([id, p]) => `<option value="${id}">${p.label}</option>`).join('');
+    }
+
+    // Fill the model dropdown for the current provider
+    populateModels() {
+        document.getElementById('ai-model').innerHTML = PROVIDERS[this.config.provider].models
+            .map(m => `<option value="${m.value}">${m.label}</option>`).join('');
+    }
+
+    // Reflect the current provider in the key input + help link
+    applyProviderUI() {
+        const p = PROVIDERS[this.config.provider];
+        const keyInput = document.getElementById('api-key');
+        keyInput.value = this.config.apiKeys[this.config.provider] || '';
+        keyInput.placeholder = `${p.keyName} API Key`;
+        const link = document.getElementById('api-key-link');
+        if (link) { link.href = p.keyUrl; link.textContent = `获取 ${p.keyName} API Key`; }
     }
 
     async checkPendingText() {
@@ -326,8 +406,17 @@ class MarkdownConverterApp {
             document.getElementById('api-panel').classList.toggle('hidden');
         });
 
+        document.getElementById('ai-provider').addEventListener('change', (e) => {
+            this.config.provider = e.target.value;
+            this.populateModels();
+            this.config.model = PROVIDERS[this.config.provider].models[0].value;
+            document.getElementById('ai-model').value = this.config.model;
+            this.applyProviderUI();
+            this.saveConfig();
+        });
+
         document.getElementById('api-key').addEventListener('change', (e) => {
-            this.config.apiKey = e.target.value;
+            this.config.apiKeys[this.config.provider] = e.target.value;
             this.saveConfig();
         });
 
@@ -490,7 +579,8 @@ Contact: https://example.com`;
     }
 
     async convertWithAI(text, docType) {
-        if (!this.config.apiKey) throw new Error('请先设置 API Key');
+        const apiKey = this.config.apiKeys[this.config.provider];
+        if (!apiKey) throw new Error('请先设置 API Key');
 
         const typeConfig = DOC_TYPE_CONFIGS[docType] || DOC_TYPE_CONFIGS.general_prose;
         const headingInstruction = buildHeadingInstruction(this.config.headingLevel);
@@ -502,11 +592,11 @@ Contact: https://example.com`;
             prompt += `\n\n## 用户风格参考\n\n以下是用户提供的 Markdown 风格样例，请模仿其格式习惯（标题选用、分隔符、代码块写法、表格样式等），但不要复制其中的内容：\n\n${this.config.styleTemplate.trim()}\n\n**最终约束（优先级高于上方样例）：** ${headingInstruction}`;
         }
 
-        const response = await fetch(`${this.config.apiBaseUrl}/chat/completions`, {
+        const response = await fetch(`${PROVIDERS[this.config.provider].baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.config.apiKey}`
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
                 model: this.config.model,
@@ -534,14 +624,18 @@ Contact: https://example.com`;
     }
 
     async testConnection() {
-        if (!this.config.apiKey) {
+        const apiKey = this.config.apiKeys[this.config.provider];
+        if (!apiKey) {
             this.showStatus('请先输入 API Key', 'error');
             return;
         }
         this.showStatus('正在测试连接...');
         try {
-            const response = await fetch(`${this.config.apiBaseUrl}/models`, {
-                headers: { 'Authorization': `Bearer ${this.config.apiKey}` }
+            // Minimal chat completion — works across every OpenAI-compatible provider
+            const response = await fetch(`${PROVIDERS[this.config.provider].baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({ model: this.config.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 })
             });
             this.showStatus(response.ok ? '连接成功！' : '连接失败: ' + response.status, response.ok ? 'success' : 'error');
         } catch (error) {
