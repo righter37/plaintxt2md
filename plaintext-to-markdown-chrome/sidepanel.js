@@ -709,21 +709,42 @@ For more information, visit https://example.com or email contact@example.com`;
 
     async testConnection() {
         const apiKey = this.config.apiKeys[this.config.provider];
+        const btn = document.getElementById('test-api');
         if (!apiKey) {
             this.showStatus('请先输入 API Key', 'error');
             return;
         }
+        // Feedback on the button itself — the footer status is easy to miss and auto-clears
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '测试中…';
         this.showStatus('正在测试连接...');
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
         try {
             // Minimal chat completion — works across every OpenAI-compatible provider
             const response = await fetch(`${PROVIDERS[this.config.provider].baseUrl}/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({ model: this.config.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 })
+                body: JSON.stringify({ model: this.config.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+                signal: controller.signal
             });
-            this.showStatus(response.ok ? '连接成功！' : '连接失败: ' + response.status, response.ok ? 'success' : 'error');
+            if (response.ok) {
+                btn.textContent = '✅ 连接成功';
+                this.showStatus('连接成功！', 'success');
+            } else {
+                let detail = `HTTP ${response.status}`;
+                try { const e = await response.json(); if (e.error?.message) detail = e.error.message; } catch (_) {}
+                btn.textContent = '❌ 连接失败';
+                this.showStatus('连接失败: ' + detail, 'error');
+            }
         } catch (error) {
-            this.showStatus('连接失败: ' + error.message, 'error');
+            btn.textContent = '❌ 连接失败';
+            this.showStatus(error.name === 'AbortError' ? '连接超时（15 秒）' : '连接失败: ' + error.message, 'error');
+        } finally {
+            clearTimeout(timer);
+            btn.disabled = false;
+            setTimeout(() => { btn.textContent = originalText; }, 4000);
         }
     }
 

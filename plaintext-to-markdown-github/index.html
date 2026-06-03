@@ -426,7 +426,7 @@ AI 会智能分析：
                 </div>
 
                 <div class="pt-4 border-t border-gray-200">
-                    <button onclick="testConnection()" class="w-full py-2 bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition">
+                    <button id="test-conn-btn" onclick="testConnection()" class="w-full py-2 bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition">
                         <i class="fas fa-plug mr-2"></i>测试连接
                     </button>
                 </div>
@@ -1070,9 +1070,18 @@ For more information, visit https://example.com or email contact@example.com`;
             const apiKey = document.getElementById('api-key').value || DEFAULT_CONFIG.apiKey;
             const baseUrl = document.getElementById('api-base-url').value || DEFAULT_CONFIG.apiBaseUrl;
             const model = document.getElementById('ai-model').value || DEFAULT_CONFIG.model;
+            const btn = document.getElementById('test-conn-btn');
 
+            if (!apiKey) { showToast('请先输入 API Key'); return; }
+
+            // Feedback on the button itself — the toast auto-hides and is easy to miss
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>测试中…';
             showToast('正在测试连接...');
 
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
             try {
                 // Minimal chat completion — works across every OpenAI-compatible provider
                 const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -1081,16 +1090,28 @@ For more information, visit https://example.com or email contact@example.com`;
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${apiKey}`
                     },
-                    body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 })
+                    body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+                    signal: controller.signal
                 });
 
                 if (response.ok) {
-                    showToast('连接成功！');
+                    btn.innerHTML = '<i class="fas fa-check mr-2"></i>连接成功';
+                    showToast('✅ 连接成功！');
                 } else {
-                    showToast('连接失败: ' + response.status);
+                    let detail = `HTTP ${response.status}`;
+                    try { const e = await response.json(); if (e.error?.message) detail = e.error.message; } catch (_) {}
+                    btn.innerHTML = '<i class="fas fa-xmark mr-2"></i>连接失败';
+                    showToast('❌ 连接失败: ' + detail);
                 }
             } catch (error) {
-                showToast('连接失败: ' + error.message);
+                btn.innerHTML = '<i class="fas fa-xmark mr-2"></i>连接失败';
+                showToast(error.name === 'AbortError'
+                    ? '❌ 连接超时（15 秒）— 可能被 CORS 拦截，建议改用 Chrome 插件版'
+                    : '❌ 连接失败: ' + error.message + '（浏览器直连可能被 CORS 拦截）');
+            } finally {
+                clearTimeout(timer);
+                btn.disabled = false;
+                setTimeout(() => { btn.innerHTML = originalHTML; }, 4000);
             }
         }
 
