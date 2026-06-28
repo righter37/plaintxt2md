@@ -1,4 +1,4 @@
-# AI Text to Markdown - Chrome Extension
+# 素记 - AI Text to Markdown Chrome Extension
 
 🤖 Chrome 浏览器扩展，将纯文本智能转换为 Markdown 格式。
 
@@ -6,6 +6,7 @@
 
 - **🎯 智能场景识别**：场景判断在浏览器本地完成（分类准确率 95%+），再套用针对性的转换策略
 - **🧠 AI 智能转换**：按识别出的场景调用大模型分析文本结构
+- **🆓 本地免费模式**：无需 API Key、无需联网，使用本地规则引擎即可进行基础转换
 - **🔌 多供应商**：阿里通义千问 / Kimi（Moonshot）/ DeepSeek / 智谱 GLM 下拉切换，各家 Key 独立保存
 - **📝 右键菜单**：选中网页文字，右键一键转换
 - **📐 侧边栏模式**：更大界面，适合复杂文档处理
@@ -52,6 +53,7 @@
 | Kimi (Moonshot) | [platform.moonshot.cn](https://platform.moonshot.cn/console/api-keys) |
 | DeepSeek | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
 | 智谱 GLM | [open.bigmodel.cn](https://open.bigmodel.cn/usercenter/apikeys) |
+| 本地规则（免费离线） | 无需 API Key |
 
 ### 1. 获取 API Key
 
@@ -64,9 +66,9 @@
 1. 点击扩展图标打开弹出窗口
 2. 点击「设置」按钮
 3. 选择 **AI 供应商**（设置面板会自动跳转对应的 Key 获取链接）
-4. 在 API Key 栏粘贴你的 Key
+4. 在 API Key 栏粘贴你的 Key（选择「本地规则」模式可跳过此步）
 5. 选择 AI 模型
-6. 点击「测试连接」验证配置
+6. 点击「测试连接」验证配置（本地模式无需测试）
 
 ## 📖 使用指南
 
@@ -151,9 +153,10 @@ chrome-extension/
 | 问题 | 解决方案 |
 |------|----------|
 | 无法加载扩展 | 确保已开启开发者模式，选择正确的文件夹 |
-| API 连接失败 | 检查 API Key 是否正确，网络是否畅通 |
+| API 连接失败 | 检查 API Key 是否正确，网络是否畅通；或切换到「本地规则」免费模式 |
 | 右键菜单不显示 | 刷新页面后重试，或重新安装扩展 |
 | 侧边栏无法打开 | 确保 Chrome 版本 >= 114 |
+| 选中文字/整页正文无法获取 | 部分页面（如 Chrome 商店、chrome:// 页面）受浏览器限制无法注入内容脚本；普通网页请刷新后重试 |
 
 ## 📄 许可证
 
